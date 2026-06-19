@@ -1,0 +1,322 @@
+import 'package:flutter/material.dart';
+import '../main.dart';
+
+class PremiumScreen extends StatefulWidget {
+  const PremiumScreen({super.key});
+
+  @override
+  State<PremiumScreen> createState() => _PremiumScreenState();
+}
+
+class _PremiumScreenState extends State<PremiumScreen> {
+  // Global application toggle states
+  bool _pushNotifications = true;
+  bool _biometricLock = false;
+
+  // Track the active selected plan tier configuration
+  String _selectedTierPlan = "Monthly Strategy";
+
+  // Shows the modal sheet to modify the baseline currency
+  void _showCurrencySelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF131D31),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                  'Select Active Currency Format',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)
+              ),
+            ),
+            ListTile(
+                title: const Text('USD - United States Dollar', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  setState(() { FinoraApp.globalCurrency = "USD (\$)"; });
+                  Navigator.pop(context);
+                }
+            ),
+            ListTile(
+                title: const Text('EUR - Euro Region', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  setState(() { FinoraApp.globalCurrency = "EUR (€)"; });
+                  Navigator.pop(context);
+                }
+            ),
+            ListTile(
+                title: const Text('GBP - Great British Pound', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  setState(() { FinoraApp.globalCurrency = "GBP (£)"; });
+                  Navigator.pop(context);
+                }
+            ),
+          ],
+        ),
+      ),
+    ).then((_) => setState(() {})); // Forces a layout update to rebuild costs on close
+  }
+
+  // API Sync Toast action
+  void _triggerSyncToast() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('API Sync Triggered: Fetching data from MarketStack caches...'),
+        backgroundColor: Color(0xFF14B8A6),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  // Simulated non-functional purchase button handler
+  void _simulatePurchase(BuildContext modalContext) {
+    Navigator.pop(modalContext); // Dismiss the modal dialog cleanly
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Checkout Intent Captured: Initiating localized pipeline for $_selectedTierPlan...'),
+        backgroundColor: const Color(0xFF2563EB),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  // Opens the dialog menu to actively toggle through subscription plans
+  void _showSubscriptionPlans() {
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          backgroundColor: const Color(0xFF0B1220),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF22314F))),
+          title: const Text(
+            'Select Pro Access Strategy',
+            style: TextStyle(color: Colors.white),
+            textAlign: TextAlign.center,
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildPlanTile(setModalState, 'Weekly Ticket', 2.99, 'Basic real-time technical alerts access'),
+                _buildPlanTile(setModalState, 'Monthly Strategy', 9.99, 'Full indicators access + Reverse Geolocation API'),
+                _buildPlanTile(setModalState, 'Annual Matrix', 79.99, 'Save 35% + Deep historical analytics parameters', isPopular: true),
+
+                const SizedBox(height: 20),
+                const Divider(color: Color(0xFF22314F), height: 1),
+                const SizedBox(height: 16),
+
+                // NEW ACTION COMPONENT: NON-FUNCTIONAL PURCHASE TIED BUTTON
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF14B8A6),
+                    minimumSize: const Size(double.infinity, 46),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _simulatePurchase(context),
+                  child: Text(
+                    'Purchase Plan Selection',
+                    style: TextStyle(
+                        color: Colors.black.withValues(alpha:0.9),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close', style: TextStyle(color: Color(0xFF64748B)))
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Custom selectable widget inside the subscription dialog window
+  Widget _buildPlanTile(StateSetter setModalState, String title, double baseUsdCost, String feature, {bool isPopular = false}) {
+    bool isSelected = _selectedTierPlan == title;
+    return GestureDetector(
+      onTap: () {
+        setModalState(() { _selectedTierPlan = title; });
+        setState(() { _selectedTierPlan = title; }); // Updates the main screen view instantly
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF131D31),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: isSelected ? const Color(0xFF14B8A6) : (isPopular ? const Color(0xFF22314F).withValues(alpha:0.5) : const Color(0xFF22314F)),
+              width: isSelected ? 2.0 : 1.0
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                Text(
+                    FinoraApp.formatPrice(baseUsdCost),
+                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(feature, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const AppLogoTitle(title: 'Hub & Settings')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // PREMIUM CONFIGURABLE TIER HUB CARD
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2563EB), Color(0xFF7C3AED), Color(0xFFEC4899)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.workspace_premium, color: Color(0xFFEAB308), size: 28),
+                          SizedBox(width: 8),
+                          Text('Premium Strategy Matrix', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: const Color(0xFF0B1220), borderRadius: BorderRadius.circular(12)),
+                        child: Text(
+                            _selectedTierPlan,
+                            style: const TextStyle(color: Color(0xFF14B8A6), fontWeight: FontWeight.bold, fontSize: 12)
+                        ),
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Explore advanced market tools, geolocation trackers, and dynamic real-time baseline analytics filters.',
+                    style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0B1220),
+                        minimumSize: const Size(double.infinity, 44),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                    ),
+                    onPressed: _showSubscriptionPlans,
+                    child: const Text('Subscription Plans', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            // APPLICATION SETTINGS SECTION
+            const Text('Application Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFF8FAFC))),
+            const SizedBox(height: 12),
+            Card(
+              color: const Color(0xFF131D31),
+              shape: RoundedRectangleBorder(side: const BorderSide(color: Color(0xFF22314F)), borderRadius: BorderRadius.circular(10)),
+              child: Column(
+                children: [
+                  _buildSettingsTile(
+                    icon: Icons.notifications,
+                    title: 'Push Notifications',
+                    subtitle: 'Configure real-time stock alert thresholds',
+                    trailing: Switch(
+                        value: _pushNotifications,
+                        onChanged: (val) => setState(() => _pushNotifications = val),
+                        activeThumbColor: const Color(0xFF14B8A6)
+                    ),
+                  ),
+                  const Divider(color: Color(0xFF22314F), height: 1),
+                  _buildSettingsTile(
+                    icon: Icons.security,
+                    title: 'Biometric Security',
+                    subtitle: 'Manage face/fingerprint credentials verification',
+                    trailing: Switch(
+                        value: _biometricLock,
+                        onChanged: (val) => setState(() => _biometricLock = val),
+                        activeThumbColor: const Color(0xFF14B8A6)
+                    ),
+                  ),
+                  const Divider(color: Color(0xFF22314F), height: 1),
+                  _buildSettingsTile(
+                    icon: Icons.currency_exchange,
+                    title: 'Base Display Currency',
+                    subtitle: 'Alter app baseline structural pricing valuations',
+                    trailing: InkWell(
+                        onTap: _showCurrencySelector,
+                        child: Text(FinoraApp.globalCurrency, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))
+                    ),
+                  ),
+                  const Divider(color: Color(0xFF22314F), height: 1),
+                  _buildSettingsTile(
+                    icon: Icons.refresh,
+                    title: 'Force API Refresh',
+                    subtitle: 'Clear cached JSON states from endpoint right now',
+                    trailing: IconButton(icon: const Icon(Icons.sync, color: Color(0xFF14B8A6)), onPressed: _triggerSyncToast),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // LOGOUT ACTION BUTTON
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF131D31),
+                  side: const BorderSide(color: Color(0xFFEF4444), width: 1.2),
+                  minimumSize: const Size(double.infinity, 54),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+              ),
+              icon: const Icon(Icons.logout, color: Color(0xFFEF4444)),
+              label: const Text('Log Out from Finora', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 15)),
+              onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsTile({required IconData icon, required String title, required String subtitle, required Widget trailing}) {
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFF38BDF8)),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFF8FAFC), fontSize: 14)),
+      subtitle: Text(subtitle, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+      trailing: trailing,
+    );
+  }
+}

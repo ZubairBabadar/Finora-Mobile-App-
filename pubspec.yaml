@@ -1,0 +1,26 @@
+name: finora
+description: "Finora - Stock Market Mobile Native Application"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.5
+  http: ^1.1.0        # For retrieving real-time API market data
+  geolocator: ^14.0.2 # Mandatory native location tracking
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true # Explicitly utilizing Material Theme requirements
+
+  # REGISTER THE CUSTOM FINORA IMAGE ASSETS HERE:
+  assets:
+    - assets/images/
