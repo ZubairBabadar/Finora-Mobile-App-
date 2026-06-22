@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "378713624345",
+    "project_id": "skibidi-c3f4c",
+    "storage_bucket": "skibidi-c3f4c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:378713624345:android:2165145d3a135826adff88",
+        "android_client_info": {
+          "package_name": "com.example.finora"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "378713624345-c819eg5075ukmji816cg406mtn32dqn9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADCw-SpvtqbPz3yZ3RMb7RT7WJ1W9euCQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "378713624345-c819eg5075ukmji816cg406mtn32dqn9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

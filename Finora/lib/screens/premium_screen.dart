@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // REQUIRED for Logout
+import '../widgets/app_logo.dart';
 import '../main.dart';
 
 class PremiumScreen extends StatefulWidget {
@@ -9,14 +11,10 @@ class PremiumScreen extends StatefulWidget {
 }
 
 class _PremiumScreenState extends State<PremiumScreen> {
-  // Global application toggle states
   bool _pushNotifications = true;
   bool _biometricLock = false;
-
-  // Track the active selected plan tier configuration
   String _selectedTierPlan = "Monthly Strategy";
 
-  // Shows the modal sheet to modify the baseline currency
   void _showCurrencySelector() {
     showModalBottomSheet(
       context: context,
@@ -57,10 +55,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
           ],
         ),
       ),
-    ).then((_) => setState(() {})); // Forces a layout update to rebuild costs on close
+    ).then((_) => setState(() {}));
   }
 
-  // API Sync Toast action
   void _triggerSyncToast() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -71,9 +68,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
     );
   }
 
-  // Simulated non-functional purchase button handler
   void _simulatePurchase(BuildContext modalContext) {
-    Navigator.pop(modalContext); // Dismiss the modal dialog cleanly
+    Navigator.pop(modalContext);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Checkout Intent Captured: Initiating localized pipeline for $_selectedTierPlan...'),
@@ -83,7 +79,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
     );
   }
 
-  // Opens the dialog menu to actively toggle through subscription plans
   void _showSubscriptionPlans() {
     showDialog(
       context: context,
@@ -108,7 +103,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 const Divider(color: Color(0xFF22314F), height: 1),
                 const SizedBox(height: 16),
 
-                // NEW ACTION COMPONENT: NON-FUNCTIONAL PURCHASE TIED BUTTON
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF14B8A6),
@@ -139,13 +133,12 @@ class _PremiumScreenState extends State<PremiumScreen> {
     );
   }
 
-  // Custom selectable widget inside the subscription dialog window
   Widget _buildPlanTile(StateSetter setModalState, String title, double baseUsdCost, String feature, {bool isPopular = false}) {
     bool isSelected = _selectedTierPlan == title;
     return GestureDetector(
       onTap: () {
         setModalState(() { _selectedTierPlan = title; });
-        setState(() { _selectedTierPlan = title; }); // Updates the main screen view instantly
+        setState(() { _selectedTierPlan = title; });
       },
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
@@ -188,7 +181,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // PREMIUM CONFIGURABLE TIER HUB CARD
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -240,8 +232,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
               ),
             ),
             const SizedBox(height: 28),
-
-            // APPLICATION SETTINGS SECTION
             const Text('Application Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFF8FAFC))),
             const SizedBox(height: 12),
             Card(
@@ -291,18 +281,20 @@ class _PremiumScreenState extends State<PremiumScreen> {
               ),
             ),
             const SizedBox(height: 24),
-
-            // LOGOUT ACTION BUTTON
+            // SECURE LOGOUT ACTION
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF131D31),
+                  backgroundColor: const Color(0xFF0B1220),
                   side: const BorderSide(color: Color(0xFFEF4444), width: 1.2),
                   minimumSize: const Size(double.infinity, 54),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
               ),
               icon: const Icon(Icons.logout, color: Color(0xFFEF4444)),
               label: const Text('Log Out from Finora', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 15)),
-              onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
+                // No navigation needed, AuthGate handles it!
+              },
             ),
             const SizedBox(height: 20),
           ],

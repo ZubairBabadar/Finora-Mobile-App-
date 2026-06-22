@@ -9,9 +9,15 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  firebase_core: ^3.0.0
+  firebase_auth: ^5.0.0
+  # Make sure you have run 'flutter pub get' in your terminal
   cupertino_icons: ^1.0.5
   http: ^1.1.0        # For retrieving real-time API market data
   geolocator: ^14.0.2 # Mandatory native location tracking
+  geocoding: ^4.0.0
+  fl_chart: ^0.66.0
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:

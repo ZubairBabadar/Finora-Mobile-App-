@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/app_logo.dart';
 import '../main.dart';
 
 class PortfolioScreen extends StatelessWidget {

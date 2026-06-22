@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../main.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // REQUIRED for real auth
+import '../widgets/app_logo.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -12,7 +13,7 @@ class _AccountScreenState extends State<AccountScreen> {
   // Flag to manage whether the screen displays sign-in or sign-up fields
   bool _isSigningUp = false;
 
-  // Controllers to grab user inputs easily for database integration later
+  // Controllers to grab user inputs easily
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
@@ -93,7 +94,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 ),
               ),
 
-              // Conditional dynamic structural field block rendering only when inside Sign Up state
+              // Conditional structural fields rendering only during Sign Up state
               if (_isSigningUp) ...[
                 const SizedBox(height: 16),
                 TextField(
@@ -127,9 +128,71 @@ class _AccountScreenState extends State<AccountScreen> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                onPressed: () {
-                  // Direct clean layout replace to switch users permanently into dashboard setup view context
-                  Navigator.pushReplacementNamed(context, '/home');
+                onPressed: () async {
+                  final email = _emailController.text.trim();
+                  final password = _passwordController.text.trim();
+
+                  // 1. Core Front-End Empty State Validation
+                  if (email.isEmpty || password.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Error: Fields cannot be left empty. Please supply valid credentials.'),
+                        backgroundColor: Color(0xFFEF4444),
+                      ),
+                    );
+                    return;
+                  }
+
+                  try {
+                    if (_isSigningUp) {
+                      // Handle passwords parity mismatch check
+                      if (password != _confirmPasswordController.text.trim()) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Error: Passwords do not match!'),
+                            backgroundColor: Color(0xFFEF4444),
+                          ),
+                        );
+                        return;
+                      }
+
+                      // Execute Firebase Sign-Up Account Generation
+                      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                        email: email,
+                        password: password,
+                      );
+                    } else {
+                      // Execute Firebase Sign-In Login Pipeline Verify
+                      await FirebaseAuth.instance.signInWithEmailAndPassword(
+                        email: email,
+                        password: password,
+                      );
+                    }
+
+                    // REMOVED BYPASS: The AuthGate stream setup inside main.dart
+                    // will automatically catch the session update token and pull in the home layout cleanly!
+                  } on FirebaseAuthException catch (e) {
+                    String userFeedbackMessage = e.message ?? "An authentication error occurred.";
+
+                    // Explicitly catch cases where user profiles do not exist inside target instance tenancy
+                    if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+                      userFeedbackMessage = "Account does not exist. Please use the link below to 'Sign Up Here' and create an account first.";
+                    } else if (e.code == 'wrong-password') {
+                      userFeedbackMessage = "Incorrect password credentials supplied. Please try again.";
+                    } else if (e.code == 'weak-password') {
+                      userFeedbackMessage = "The password provided is too weak.";
+                    } else if (e.code == 'email-already-in-use') {
+                      userFeedbackMessage = "An account already exists for that email configuration.";
+                    }
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(userFeedbackMessage),
+                        backgroundColor: const Color(0xFFEF4444),
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                  }
                 },
                 child: Text(
                     _isSigningUp ? 'Register & Enter' : 'Access Dashboard',
@@ -150,6 +213,10 @@ class _AccountScreenState extends State<AccountScreen> {
                     onTap: () {
                       setState(() {
                         _isSigningUp = !_isSigningUp;
+                        // Clear out existing states on tab swap contexts
+                        _emailController.clear();
+                        _passwordController.clear();
+                        _confirmPasswordController.clear();
                       });
                     },
                     child: Text(
