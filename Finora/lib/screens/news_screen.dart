@@ -1,132 +1,371 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import '../main.dart';
 import '../services/twelve_data_service.dart';
 import '../services/watchlist_manager.dart';
-import '../widgets/app_logo.dart';
 
-class MarketNewsScreen extends StatefulWidget {
-  const MarketNewsScreen({super.key});
+class WatchlistScreen extends StatefulWidget {
+  const WatchlistScreen({super.key});
 
   @override
-  State<MarketNewsScreen> createState() => _MarketNewsScreenState();
+  State<WatchlistScreen> createState() => _WatchlistScreenState();
 }
 
-class _MarketNewsScreenState extends State<MarketNewsScreen> {
-  final FinnhubService _finnhubService = FinnhubService();
-  final Map<String, Map<String, dynamic>> _liveData = {};
+class _WatchlistScreenState extends State<WatchlistScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  List<dynamic> _lookoutNews = [];
+  String _searchQuery = "";
   bool _isLoading = false;
+  bool _isLoadingNews = false;
+
+  static const String _token = "d8qhif1r01qr03nj4shgd8qhif1r01qr03nj4si0";
 
   @override
   void initState() {
     super.initState();
-    _loadWatchlistMetrics();
+    _tabController = TabController(length: 2, vsync: this);
+    _initialSetup();
+
+    _tabController.addListener(() {
+      if (_tabController.index == 1 && !_tabController.indexIsChanging) {
+        _fetchLookoutNews();
+      }
+    });
   }
 
-  Future<void> _loadWatchlistMetrics() async {
-    setState(() => _isLoading = true);
-    for (String symbol in WatchlistManager.selectedSymbols) {
-      final quote = await _finnhubService.fetchLiveQuote(symbol);
-      final double currentPrice = double.parse((quote['c'] ?? 150.0).toString());
-      final double dp = double.parse((quote['dp'] ?? 0.0).toString());
-
-      _liveData[symbol] = {
-        'price': currentPrice,
-        'change': '${dp >= 0 ? "+" : ""}${dp.toStringAsFixed(2)}%',
-        'isBullish': dp >= 0
-      };
+  Future<void> _initialSetup() async {
+    if (WatchlistManager.selectedSymbols.isEmpty) {
+      await WatchlistManager.initializeWatchlist();
     }
-    if (mounted) setState(() => _isLoading = false);
+    _loadWatchlistPrices();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadWatchlistPrices() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    await WatchlistManager.fetchWatchlistPrices();
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _fetchLookoutNews() async {
+    final symbols = WatchlistManager.selectedSymbols.toList();
+    if (symbols.isEmpty) {
+      setState(() => _lookoutNews = []);
+      return;
+    }
+
+    setState(() => _isLoadingNews = true);
+    List<dynamic> compiledNews = [];
+
+    // CHANGED: Pulls news dynamically for ALL saved watchlist elements concurrently
+    final sampleTargets = symbols.toList();
+    final today = DateTime.now().toString().substring(0, 10);
+    // CHANGED: Expanded lookup timeline gap constraint to 30 days for continuous feeds
+    final weekAgo = DateTime.now().subtract(const Duration(days: 30)).toString().substring(0, 10);
+
+    final newsTasks = sampleTargets.map((symbol) async {
+      try {
+        final newsUrl = Uri.parse("https://finnhub.io/api/v1/company-news?symbol=$symbol&from=$weekAgo&to=$today&token=$_token");
+        final response = await http.get(newsUrl);
+        if (response.statusCode == 200) {
+          final List<dynamic> parsed = json.decode(response.body);
+          // CHANGED: Boosted standard layout snapshot to track up to 10 articles per ticket
+          return parsed.take(10).toList();
+        }
+      } catch (_) {}
+      return [];
+    });
+
+    final results = await Future.wait(newsTasks);
+    for (var list in results) {
+      compiledNews.addAll(list);
+    }
+
+    compiledNews.sort((a, b) => (b['datetime'] ?? 0).compareTo(a['datetime'] ?? 0));
+
+    if (mounted) {
+      setState(() {
+        _lookoutNews = compiledNews;
+        _isLoadingNews = false;
+      });
+    }
+  }
+
+  Future<void> _navigateToDetail(String symbol) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFF14B8A6)),
+      ),
+    );
+
+    try {
+      final quote = await FinnhubService().fetchLiveQuote(symbol);
+      final today = DateTime.now().toString().substring(0, 10);
+      final weekAgo = DateTime.now().subtract(const Duration(days: 7)).toString().substring(0, 10);
+
+      final newsUrl = Uri.parse("https://finnhub.io/api/v1/company-news?symbol=$symbol&from=$weekAgo&to=$today&token=$_token");
+      final response = await http.get(newsUrl);
+
+      List<dynamic> parsedNewsList = [];
+      if (response.statusCode == 200) {
+        parsedNewsList = json.decode(response.body);
+      }
+
+      if (context.mounted) Navigator.pop(context);
+
+      if (quote.containsKey('c') && quote['c'] != 0 && quote['c'] != null) {
+        final double price = double.parse(quote['c'].toString());
+        final double percent = double.parse((quote['dp'] ?? 0.0).toString());
+        final bool isBullish = percent >= 0;
+
+        if (context.mounted) {
+          Navigator.pushNamed(context, '/stock-detail', arguments: {
+            'symbol': symbol,
+            'name': 'Saved Asset Security',
+            'usdPrice': price,
+            'change': '${isBullish ? "+" : ""}${percent.toStringAsFixed(2)}%',
+            'isBullish': isBullish,
+            'newsList': parsedNewsList
+          }).then((_) {
+            _loadWatchlistPrices();
+            if (_tabController.index == 1) _fetchLookoutNews();
+          });
+        }
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final activeSymbols = WatchlistManager.selectedSymbols.toList();
+    final filteredSymbols = WatchlistManager.selectedSymbols.where((symbol) {
+      return symbol.toUpperCase().contains(_searchQuery.toUpperCase().trim());
+    }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
-        title: const AppLogoTitle(title: 'Watchlist & News'),
-        actions: [IconButton(icon: const Icon(Icons.refresh, color: Color(0xFF14B8A6)), onPressed: _loadWatchlistMetrics)],
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // WATCHLIST SECTION
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text("My Watchlist", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+        title: const Text('Watchlist Dashboard', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white)),
+        backgroundColor: const Color(0xFF0F172A),
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: _isLoading || _isLoadingNews
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.refresh, color: Color(0xFF14B8A6)),
+            onPressed: () {
+              _loadWatchlistPrices();
+              if (_tabController.index == 1) _fetchLookoutNews();
+            },
+          )
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFF1E293B), width: 1)),
             ),
-            if (activeSymbols.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text("Your watchlist is empty. Star items on the home screen to track them!", style: TextStyle(color: Colors.grey)),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: activeSymbols.length,
-                itemBuilder: (context, index) {
-                  final symbol = activeSymbols[index];
-                  final data = _liveData[symbol] ?? {'price': 0.0, 'change': '0.00%', 'isBullish': true};
-
-                  return Card(
-                    color: const Color(0xFF1E293B),
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: ListTile(
-                      title: Text(symbol, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(FinoraApp.formatPrice(data['price']), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                          Text(data['change'], style: TextStyle(color: data['isBullish'] ? const Color(0xFF22C55E) : const Color(0xFFEF4444), fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-            const SizedBox(height: 16),
-
-            // TRENDING NEWS SECTION
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text("Trending News", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-            ),
-            _buildNewsCard('Tech Surge Alert', 'NVIDIA and Microsoft shares hit record highs following heavy enterprise cloud infrastructure deployments worldwide.', '10m ago'),
-            _buildNewsCard('Federal Rate Policy Update', 'Central reserve parameters indicate prolonged stabilization holding pattern structural updates.', '42m ago'),
-            _buildNewsCard('Global Logistics', 'Supply chain efficiency rises as major ports automate tracking operations.', '2h ago'),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNewsCard(String title, String description, String time) {
-    return Card(
-      color: const Color(0xFF1E293B),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Padding(
-        padding: const EdgeInsets.all(14.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF38BDF8))),
-                Text(time, style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              indicatorColor: const Color(0xFF14B8A6),
+              labelColor: const Color(0xFF14B8A6),
+              unselectedLabelColor: const Color(0xFF64748B),
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              indicatorWeight: 2,
+              tabs: const [
+                Tab(text: "My Assets"),
+                Tab(text: "Lookout Pulse"),
               ],
             ),
-            const SizedBox(height: 6),
-            Text(description, style: const TextStyle(height: 1.4, color: Color(0xFFCBD5E1), fontSize: 13)),
-          ],
+          ),
         ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: TextField(
+                  style: const TextStyle(color: Colors.white),
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                  decoration: InputDecoration(
+                    hintText: 'Search within saved assets...',
+                    hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
+                    prefixIcon: const Icon(Icons.search, color: Color(0xFF14B8A6), size: 18),
+                    filled: true,
+                    fillColor: const Color(0xFF1E293B),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+              ),
+
+              Expanded(
+                child: filteredSymbols.isEmpty
+                    ? Center(
+                  child: Text(
+                    _searchQuery.isEmpty
+                        ? 'Your Watchlist is empty.\nStar items on the home screen to track them!'
+                        : 'No matching tickers found inside\nyour saved portfolio stack.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 14, height: 1.4),
+                  ),
+                )
+                    : RefreshIndicator(
+                  color: const Color(0xFF14B8A6),
+                  onRefresh: _loadWatchlistPrices,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: filteredSymbols.length,
+                    separatorBuilder: (context, index) => const Divider(color: Color(0xFF1E293B), height: 1),
+                    itemBuilder: (context, index) {
+                      final symbol = filteredSymbols[index];
+                      final data = WatchlistManager.cachedPrices[symbol] ?? {'price': 0.0, 'dp': 0.0};
+                      final double currentPrice = data['price'] ?? 0.0;
+                      final double percent = data['dp'] ?? 0.0;
+                      final bool isBullish = percent >= 0;
+
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        onTap: () => _navigateToDetail(symbol),
+                        title: Text(
+                          symbol,
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                        ),
+                        subtitle: const Padding(
+                          padding: EdgeInsets.only(top: 4.0),
+                          child: Text('Global Market Security', style: TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  currentPrice == 0.0 ? "Loading..." : FinoraApp.formatPrice(currentPrice),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${isBullish ? "+" : ""}${percent.toStringAsFixed(2)}%',
+                                  style: TextStyle(
+                                    color: isBullish ? const Color(0xFF22C55E) : const Color(0xFFEF4444),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.star, color: Color(0xFFEAB308), size: 20),
+                              onPressed: () async {
+                                await WatchlistManager.toggleWatchlist(symbol, context);
+                                setState(() {});
+                              },
+                            )
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // TAB 2: LOOKOUT PULSE LIVE RECENT NEWS FEED
+          _isLoadingNews
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF14B8A6)))
+              : _lookoutNews.isEmpty
+              ? const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24.0),
+              child: Text(
+                'Track active security tickers under "My Assets"\nto generate specialized financial lookup intel feeds.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF64748B), fontSize: 13, height: 1.4),
+              ),
+            ),
+          )
+              : RefreshIndicator(
+            color: const Color(0xFF14B8A6),
+            onRefresh: _fetchLookoutNews,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _lookoutNews.length,
+              itemBuilder: (context, index) {
+                final story = _lookoutNews[index];
+                final String channel = story['source'] ?? 'Market Brief';
+                final String title = story['headline'] ?? '';
+                final String overview = story['summary'] ?? '';
+                final int epoch = story['datetime'] ?? 0;
+                final String postTime = epoch > 0
+                    ? DateFormat('MM/dd hh:mm a').format(DateTime.fromMillisecondsSinceEpoch(epoch * 1000))
+                    : 'Recent';
+
+                if (title.isEmpty) return const SizedBox.shrink();
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(channel.toUpperCase(), style: const TextStyle(color: Color(0xFF14B8A6), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                          Text(postTime, style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14, height: 1.3)),
+                      if (overview.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(overview, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, height: 1.3)),
+                      ]
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
-import 'screens/news_screen.dart';
+import 'screens/news_screen.dart'; // Fixed your import match naming context
 import 'screens/portfolio_screen.dart';
 import 'screens/premium_screen.dart';
 
@@ -14,10 +14,10 @@ class NavigationController extends StatefulWidget {
 class _NavigationControllerState extends State<NavigationController> {
   int _currentIndex = 0;
 
-  // Reduced down to 4 target main windows
+  // Kept your 4 primary target windows intact
   final List<Widget> _screens = [
     const HomeScreen(),        // Tab 0
-    const MarketNewsScreen(),  // Tab 1
+    const WatchlistScreen(),   // Tab 1
     const PortfolioScreen(),   // Tab 2
     const PremiumScreen(),     // Tab 3
   ];
@@ -25,7 +25,11 @@ class _NavigationControllerState extends State<NavigationController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      // FIXED: Swapped out raw array selector for IndexedStack to retain memory states perfectly!
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),

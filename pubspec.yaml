@@ -18,6 +18,7 @@ dependencies:
   geocoding: ^4.0.0
   fl_chart: ^0.66.0
   intl: ^0.20.2
+  cloud_firestore: ^5.6.12
 
 dev_dependencies:
   flutter_test:

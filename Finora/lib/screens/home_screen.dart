@@ -3,7 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart'; // Ensure intl is added to pubspec.yaml for timestamp rendering
+import 'package:intl/intl.dart';
 import '../main.dart';
 import '../services/twelve_data_service.dart';
 import '../services/watchlist_manager.dart';
@@ -16,20 +16,27 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMixin {
   final FinnhubService _finnhubService = FinnhubService();
   String _searchQuery = "";
   bool _isRefreshing = false;
   String _locationStatus = "Detecting location...";
   String _selectedCountry = 'US';
-  String? _lastUpdatedTimestamp; // Bug 1 & 2: Rate limit caching safeguard state
+  String? _lastUpdatedTimestamp;
   String? _apiErrorMessage;
+
+  // Track if location has already been initialized to prevent infinite loops
+  bool _isLocationInitialized = false;
+
+  // Active Production Credentials Shared Globally
+  static const String _token = "d8qhif1r01qr03nj4shgd8qhif1r01qr03nj4si0";
 
   final Map<String, String> _countryOptions = {
     'US': 'United States 🇺🇸',
     'GB': 'United Kingdom 🇬🇧',
     'DE': 'Germany 🇩🇪',
     'CA': 'Canada 🇨🇦',
+    'GLOBAL': 'Global Market 🌐',
   };
 
   final Map<String, Map<String, Map<String, dynamic>>> _regionalMarkets = {
@@ -69,6 +76,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Map<String, Map<String, dynamic>> _allStocks = {};
 
+  // REQUIRED: Keeps screen cached completely within IndexedStack layout structures
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
@@ -77,10 +88,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _handleLocationPermission() async {
+    if (_isLocationInitialized) return;
+
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       if (mounted) setState(() => _locationStatus = "Location services disabled");
       _fetchLivePrices();
+      _isLocationInitialized = true;
       return;
     }
 
@@ -90,6 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (permission == LocationPermission.denied) {
         if (mounted) setState(() => _locationStatus = "Permission denied");
         _fetchLivePrices();
+        _isLocationInitialized = true;
         return;
       }
     }
@@ -110,12 +125,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (position == null) {
       if (mounted) {
         setState(() {
-          _locationStatus = "Berlin, Germany (Simulated)";
-          _selectedCountry = 'DE';
-          _allStocks = Map.from(_regionalMarkets['DE']!);
+          _locationStatus = "Location unavailable";
+          _allStocks = Map.from(_regionalMarkets[_selectedCountry]!);
         });
       }
       _fetchLivePrices();
+      _isLocationInitialized = true;
       return;
     }
 
@@ -123,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
       List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
-        String rawCountryCode = place.isoCountryCode ?? 'US';
+        String rawCountryCode = (place.isoCountryCode ?? 'US').toUpperCase();
         String locationName = "${place.locality ?? ''}, ${place.country ?? ''}".trim();
 
         if (mounted) {
@@ -140,16 +155,16 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _locationStatus = "Berlin, Germany";
-          _selectedCountry = 'DE';
-          _allStocks = Map.from(_regionalMarkets['DE']!);
+          _locationStatus = "Location resolved";
+          _allStocks = Map.from(_regionalMarkets[_selectedCountry]!);
         });
       }
       _fetchLivePrices();
+    } finally {
+      _isLocationInitialized = true;
     }
   }
 
-  // Bug 1 Fix: Explicit error state handler and loading wrapper to intercept API rate limits
   Future<void> _fetchLivePrices() async {
     if (_allStocks.isEmpty) return;
     setState(() {
@@ -162,7 +177,6 @@ class _HomeScreenState extends State<HomeScreen> {
     for (String symbol in _allStocks.keys) {
       try {
         final quote = await _finnhubService.fetchLiveQuote(symbol);
-        // Standard Finnhub empty payload structural validation indicator
         if (quote.containsKey('c') && quote['c'] != 0 && quote['c'] != null) {
           if (mounted) {
             setState(() {
@@ -181,7 +195,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) {
       setState(() {
         _isRefreshing = false;
-        // Bug 2: Log exact timestamp formatting sequence safely
         _lastUpdatedTimestamp = DateFormat('hh:mm:ss a').format(DateTime.now());
         if (rateLimitedDetected) {
           _apiErrorMessage = "API standard tier request threshold reached. Showing last known snapshot data.";
@@ -193,14 +206,27 @@ class _HomeScreenState extends State<HomeScreen> {
   void _updateCountryMarketSelection(String countryCode) {
     setState(() {
       _selectedCountry = countryCode;
-      _allStocks = Map.from(_regionalMarkets[countryCode]!);
+      if (_regionalMarkets.containsKey(countryCode)) {
+        _allStocks = Map.from(_regionalMarkets[countryCode]!);
+      } else if (countryCode == 'GLOBAL') {
+        _allStocks = {
+          'AAPL': Map.from(_regionalMarkets['US']!['AAPL']!),
+          'TSLA': Map.from(_regionalMarkets['US']!['TSLA']!),
+          'BP': Map.from(_regionalMarkets['GB']!['BP']!),
+          'SAP': Map.from(_regionalMarkets['DE']!['SAP']!),
+          'ALIZY': Map.from(_regionalMarkets['DE']!['ALIZY']!),
+          'SHOP': Map.from(_regionalMarkets['CA']!['SHOP']!),
+        };
+      } else {
+        _allStocks = {};
+      }
     });
     _fetchLivePrices();
   }
 
-  Future<void> _performDynamicSearch(String rawSymbol) async {
-    final symbol = rawSymbol.trim().toUpperCase();
-    if (symbol.isEmpty) return;
+  Future<void> _performDynamicSearch(String rawQuery) async {
+    final query = rawQuery.trim();
+    if (query.isEmpty) return;
 
     showDialog(
       context: context,
@@ -209,17 +235,69 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     try {
-      final quote = await _finnhubService.fetchLiveQuote(symbol);
-      final String token = "YOUR_FINNHUB_KEY_HERE";
+      final searchUrl = Uri.parse("https://finnhub.io/api/v1/search?q=${Uri.encodeComponent(query)}&token=$_token");
+      final searchResponse = await http.get(searchUrl);
+
+      String? targetedSymbol;
+      String targetedName = 'Global Security Asset';
+
+      if (searchResponse.statusCode == 200) {
+        final searchData = json.decode(searchResponse.body);
+        if (searchData.containsKey('result') && (searchData['result'] as List).isNotEmpty) {
+          final results = searchData['result'] as List;
+
+          if (_selectedCountry == 'GLOBAL') {
+            final bestMatch = results[0];
+            targetedSymbol = bestMatch['symbol'];
+            targetedName = bestMatch['description'] ?? targetedName;
+          } else {
+            for (var item in results) {
+              String currentSymbol = (item['symbol'] ?? '').toString().toUpperCase();
+              bool matchesRegion = false;
+
+              if (_selectedCountry == 'DE' && (currentSymbol.endsWith('.DE') || currentSymbol.endsWith('.F'))) {
+                matchesRegion = true;
+              } else if (_selectedCountry == 'GB' && (currentSymbol.endsWith('.L') || currentSymbol.endsWith('.IL'))) {
+                matchesRegion = true;
+              } else if (_selectedCountry == 'CA' && currentSymbol.endsWith('.TO')) {
+                matchesRegion = true;
+              } else if (_selectedCountry == 'US' && !currentSymbol.contains('.')) {
+                matchesRegion = true;
+              }
+
+              if (matchesRegion) {
+                targetedSymbol = currentSymbol;
+                targetedName = item['description'] ?? targetedName;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (targetedSymbol == null) {
+        if (context.mounted) Navigator.pop(context);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Asset found but it isn't listed in your selected market ($_selectedCountry). Switch to 'Global Market' to view."),
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+          );
+        }
+        return;
+      }
+
+      final quote = await _finnhubService.fetchLiveQuote(targetedSymbol);
+
       final today = DateTime.now().toString().substring(0, 10);
       final weekAgo = DateTime.now().subtract(const Duration(days: 7)).toString().substring(0, 10);
-
-      final newsUrl = Uri.parse("https://finnhub.io/api/v1/company-news?symbol=$symbol&from=$weekAgo&to=$today&token=$token");
-      final response = await http.get(newsUrl);
+      final newsUrl = Uri.parse("https://finnhub.io/api/v1/company-news?symbol=$targetedSymbol&from=$weekAgo&to=$today&token=$_token");
+      final newsResponse = await http.get(newsUrl);
 
       List<dynamic> parsedNewsList = [];
-      if (response.statusCode == 200) {
-        parsedNewsList = json.decode(response.body);
+      if (newsResponse.statusCode == 200) {
+        parsedNewsList = json.decode(newsResponse.body);
       }
 
       if (context.mounted) Navigator.pop(context);
@@ -229,11 +307,13 @@ class _HomeScreenState extends State<HomeScreen> {
         final double percent = double.parse((quote['dp'] ?? 0.0).toString());
         final bool isBullish = percent >= 0;
 
-        String displayName = _allStocks.containsKey(symbol) ? _allStocks[symbol]!['name'] : 'Global Security Asset';
+        String displayName = _allStocks.containsKey(targetedSymbol)
+            ? _allStocks[targetedSymbol]!['name']
+            : targetedName;
 
         if (context.mounted) {
           Navigator.pushNamed(context, '/stock-detail', arguments: {
-            'symbol': symbol,
+            'symbol': targetedSymbol,
             'name': displayName,
             'usdPrice': price,
             'change': '${isBullish ? "+" : ""}${percent.toStringAsFixed(2)}%',
@@ -244,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Ticker '$symbol' returned an empty profile signature from Finnhub.")),
+            SnackBar(content: Text("No live indices returned for symbol field sequence '$targetedSymbol'.")),
           );
         }
       }
@@ -255,6 +335,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
     final queryUpper = _searchQuery.toUpperCase().trim();
     final filteredSymbols = _allStocks.keys.where((sym) =>
     sym.contains(queryUpper) ||
@@ -279,7 +361,6 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // HEADER ROW BLOCK
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
@@ -327,7 +408,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Bug 1 & 2 UI Safety Net Banner Section
           if (_lastUpdatedTimestamp != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -351,7 +431,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Text(_apiErrorMessage!, style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 11, fontWeight: FontWeight.w500)),
             ),
 
-          // SEARCH INPUT INTERFACE FIELD
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: TextField(
@@ -376,7 +455,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Text("Trending Tickers ($_selectedCountry)", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white60)),
           ),
 
-          // Bug 4 Fix: Dynamic snapshot map configuration loop supporting empty lists safely
           Expanded(
             child: filteredSymbols.isEmpty && !showDynamicOption
                 ? Center(
@@ -414,14 +492,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       onTap: () => _performDynamicSearch(queryUpper),
                       leading: const Icon(Icons.travel_explore, color: Color(0xFF38BDF8)),
-                      title: Text("Search '$queryUpper' globally", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
-                      subtitle: const Text("Fetch live metrics & news from Finnhub", style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                      title: Text("Search '$queryUpper' on tracking indices", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
+                      subtitle: Text("Query targeted against filter layer: $_selectedCountry", style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: Icon(isSavedGlobal ? Icons.star : Icons.star_border, color: const Color(0xFFEAB308)),
-                            onPressed: () => setState(() => WatchlistManager.toggleWatchlist(queryUpper, context)),
+                            icon: Icon(
+                              isSavedGlobal ? Icons.star : Icons.star_border,
+                              color: isSavedGlobal ? const Color(0xFFEAB308) : const Color(0xFF64748B),
+                            ),
+                            onPressed: () async {
+                              await WatchlistManager.toggleWatchlist(queryUpper, context);
+                              setState(() {});
+                            },
                           ),
                           const Icon(Icons.arrow_forward_ios, color: Color(0xFF14B8A6), size: 14),
                         ],
@@ -443,7 +527,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    onTap: () => _performDynamicSearch(symbol), // Bug 4 Fix: Continuous clean dynamic downstream detail view routing loop
+                    onTap: () => _performDynamicSearch(symbol),
                     title: Text(symbol, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
                     subtitle: Text(stock['name'] ?? '', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                     trailing: Row(
@@ -459,8 +543,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(width: 8),
                         IconButton(
-                          icon: Icon(isSaved ? Icons.star : Icons.star_border, color: const Color(0xFFEAB308)),
-                          onPressed: () => setState(() => WatchlistManager.toggleWatchlist(symbol, context)),
+                          icon: Icon(
+                            isSaved ? Icons.star : Icons.star_border,
+                            color: isSaved ? const Color(0xFFEAB308) : const Color(0xFF64748B),
+                          ),
+                          onPressed: () async {
+                            await WatchlistManager.toggleWatchlist(symbol, context);
+                            setState(() {});
+                          },
                         )
                       ],
                     ),
