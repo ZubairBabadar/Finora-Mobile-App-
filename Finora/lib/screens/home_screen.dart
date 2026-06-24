@@ -4,6 +4,8 @@ import 'package:geocoding/geocoding.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // NEW: Required for extracting current UID context
+import 'package:cloud_firestore/cloud_firestore.dart'; // NEW: Required for retrieving the unique username doc
 import '../main.dart';
 import '../services/twelve_data_service.dart';
 import '../services/watchlist_manager.dart';
@@ -24,6 +26,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   String _selectedCountry = 'US';
   String? _lastUpdatedTimestamp;
   String? _apiErrorMessage;
+
+  // NEW: State property to hold the user's customized username string
+  String _displayName = "Investor";
 
   // Track if location has already been initialized to prevent infinite loops
   bool _isLocationInitialized = false;
@@ -85,6 +90,24 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     super.initState();
     _allStocks = Map.from(_regionalMarkets[_selectedCountry]!);
     _handleLocationPermission();
+    _fetchFirestoreUsername(); // NEW: Triggers data ingestion loop for the user's profile info
+  }
+
+  // NEW: Queries the specific Firestore document linked to the user's Auth token UID
+  Future<void> _fetchFirestoreUsername() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (doc.exists && doc.data() != null && doc.data()!.containsKey('username')) {
+          if (mounted) {
+            setState(() {
+              _displayName = doc.get('username');
+            });
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _handleLocationPermission() async {
@@ -370,7 +393,8 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Welcome, Investor", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                      // CHANGED: Injected the live dynamic display variable instead of a generic text string
+                      Text("Welcome, $_displayName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
                       const SizedBox(height: 4),
                       Row(
                         children: [
