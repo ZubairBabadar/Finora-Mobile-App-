@@ -6,6 +6,7 @@ import 'dart:math';
 import '../widgets/app_logo.dart';
 import '../services/otp_service.dart'; // REQUIRED: For validation checks
 import '../widgets/otp_verification_sheet.dart'; // REQUIRED: Persistent verification UI modal
+import '../widgets/forgot_password_sheet.dart'; // ADDED: Recovery modal sheet connection
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -143,6 +144,35 @@ class _AccountScreenState extends State<AccountScreen> {
                   ),
                 ),
               ),
+
+              // ADDED: Forgot Password element (Only visible when signing in)
+              if (!_isSigningUp) ...[
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (context) => const ForgotPasswordSheet(),
+                      );
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4.0),
+                      child: Text(
+                        'Forgot Password?',
+                        style: TextStyle(
+                          color: Color(0xFF38BDF8),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
 
               if (_isSigningUp) ...[
                 const SizedBox(height: 16),
