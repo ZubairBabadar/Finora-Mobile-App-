@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'twelve_data_service.dart';
+import 'finnhub_service.dart';
 
 class WatchlistManager {
   // In-memory runtime cache for quick UI lookup checks

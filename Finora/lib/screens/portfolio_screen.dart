@@ -226,7 +226,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 borderData: FlBorderData(show: false),
                 lineTouchData: LineTouchData(
                   touchTooltipData: LineTouchTooltipData(
-                    tooltipBgColor: const Color(0xFF1E293B),
+                    getTooltipColor: (touchedSpot) => const Color(0xFF1E293B),
                     tooltipBorder: const BorderSide(color: Color(0xFF14B8A6), width: 1),
                     getTooltipItems: (List<LineBarSpot> touchedSpots) {
                       return touchedSpots.map((barSpot) {

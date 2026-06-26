@@ -20,7 +20,7 @@ class FinnhubService {
   }
 
   /// Pulls historical closing prices for your charts from Finnhub
-  Future<List<double>> fetchChartCoordinates(String symbol) async {
+  Future<List<double>> fetchChartCoordinates(String symbol, String resolution) async {
     final int now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final int oneDayAgo = now - (24 * 60 * 60);
 

@@ -4,10 +4,10 @@ import 'package:geocoding/geocoding.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // NEW: Required for extracting current UID context
-import 'package:cloud_firestore/cloud_firestore.dart'; // NEW: Required for retrieving the unique username doc
+import 'package:firebase_auth/firebase_auth.dart'; // REQUIRED: Extracting current UID context
+import 'package:cloud_firestore/cloud_firestore.dart'; // REQUIRED: Retrieving the unique username doc
 import '../main.dart';
-import '../services/twelve_data_service.dart';
+import '../services/finnhub_service.dart';
 import '../services/watchlist_manager.dart';
 import '../widgets/app_logo.dart';
 
@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   String? _lastUpdatedTimestamp;
   String? _apiErrorMessage;
 
-  // NEW: State property to hold the user's customized username string
+  // State property to hold the user's customized username string
   String _displayName = "Investor";
 
   // Track if location has already been initialized to prevent infinite loops
@@ -90,10 +90,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     super.initState();
     _allStocks = Map.from(_regionalMarkets[_selectedCountry]!);
     _handleLocationPermission();
-    _fetchFirestoreUsername(); // NEW: Triggers data ingestion loop for the user's profile info
+    _fetchFirestoreUsername(); // Triggers data ingestion loop for the user's profile info
   }
 
-  // NEW: Queries the specific Firestore document linked to the user's Auth token UID
+  // Queries the specific Firestore document linked to the user's Auth token UID
   Future<void> _fetchFirestoreUsername() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -250,6 +250,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   Future<void> _performDynamicSearch(String rawQuery) async {
     final query = rawQuery.trim();
     if (query.isEmpty) return;
+    final queryUpper = query.toUpperCase();
 
     showDialog(
       context: context,
@@ -258,58 +259,61 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     );
 
     try {
-      final searchUrl = Uri.parse("https://finnhub.io/api/v1/search?q=${Uri.encodeComponent(query)}&token=$_token");
-      final searchResponse = await http.get(searchUrl);
-
       String? targetedSymbol;
       String targetedName = 'Global Security Asset';
 
-      if (searchResponse.statusCode == 200) {
-        final searchData = json.decode(searchResponse.body);
-        if (searchData.containsKey('result') && (searchData['result'] as List).isNotEmpty) {
-          final results = searchData['result'] as List;
+      // FIXED: If the ticker is already in our active _allStocks dictionary, use it immediately
+      if (_allStocks.containsKey(queryUpper)) {
+        targetedSymbol = queryUpper;
+        targetedName = _allStocks[queryUpper]!['name'] ?? targetedName;
+      } else {
+        final searchUrl = Uri.parse("https://finnhub.io/api/v1/search?q=${Uri.encodeComponent(query)}&token=$_token");
+        final searchResponse = await http.get(searchUrl);
 
-          if (_selectedCountry == 'GLOBAL') {
-            final bestMatch = results[0];
-            targetedSymbol = bestMatch['symbol'];
-            targetedName = bestMatch['description'] ?? targetedName;
-          } else {
-            for (var item in results) {
-              String currentSymbol = (item['symbol'] ?? '').toString().toUpperCase();
-              bool matchesRegion = false;
+        if (searchResponse.statusCode == 200) {
+          final searchData = json.decode(searchResponse.body);
+          if (searchData.containsKey('result') && (searchData['result'] as List).isNotEmpty) {
+            final results = searchData['result'] as List;
 
-              if (_selectedCountry == 'DE' && (currentSymbol.endsWith('.DE') || currentSymbol.endsWith('.F'))) {
-                matchesRegion = true;
-              } else if (_selectedCountry == 'GB' && (currentSymbol.endsWith('.L') || currentSymbol.endsWith('.IL'))) {
-                matchesRegion = true;
-              } else if (_selectedCountry == 'CA' && currentSymbol.endsWith('.TO')) {
-                matchesRegion = true;
-              } else if (_selectedCountry == 'US' && !currentSymbol.contains('.')) {
-                matchesRegion = true;
+            if (_selectedCountry == 'GLOBAL') {
+              final bestMatch = results[0];
+              targetedSymbol = bestMatch['symbol'];
+              targetedName = bestMatch['description'] ?? targetedName;
+            } else {
+              for (var item in results) {
+                String currentSymbol = (item['symbol'] ?? '').toString().toUpperCase();
+                bool matchesRegion = false;
+
+                if (_selectedCountry == 'DE' && (currentSymbol.endsWith('.DE') || currentSymbol.endsWith('.F'))) {
+                  matchesRegion = true;
+                } else if (_selectedCountry == 'GB' && (currentSymbol.endsWith('.L') || currentSymbol.endsWith('.IL'))) {
+                  matchesRegion = true;
+                } else if (_selectedCountry == 'CA' && currentSymbol.endsWith('.TO')) {
+                  matchesRegion = true;
+                } else if (_selectedCountry == 'US' && !currentSymbol.contains('.')) {
+                  matchesRegion = true;
+                }
+
+                if (matchesRegion) {
+                  targetedSymbol = currentSymbol;
+                  targetedName = item['description'] ?? targetedName;
+                  break;
+                }
               }
 
-              if (matchesRegion) {
-                targetedSymbol = currentSymbol;
-                targetedName = item['description'] ?? targetedName;
-                break;
+              // FIXED: Fallback safety step so searches don't crash if suffix tags aren't perfectly appended
+              if (targetedSymbol == null) {
+                final bestMatch = results[0];
+                targetedSymbol = bestMatch['symbol'];
+                targetedName = bestMatch['description'] ?? targetedName;
               }
             }
           }
         }
       }
 
-      if (targetedSymbol == null) {
-        if (context.mounted) Navigator.pop(context);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Asset found but it isn't listed in your selected market ($_selectedCountry). Switch to 'Global Market' to view."),
-              backgroundColor: const Color(0xFFEF4444),
-            ),
-          );
-        }
-        return;
-      }
+      // Final ultimate safety fallback loop to ensure variable is populated
+      targetedSymbol ??= queryUpper;
 
       final quote = await _finnhubService.fetchLiveQuote(targetedSymbol);
 
@@ -325,11 +329,23 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
       if (context.mounted) Navigator.pop(context);
 
-      if (quote.containsKey('c') && quote['c'] != 0 && quote['c'] != null) {
-        final double price = double.parse(quote['c'].toString());
-        final double percent = double.parse((quote['dp'] ?? 0.0).toString());
-        final bool isBullish = percent >= 0;
+      // FIXED: Read metric prices directly from existing map arrays if live candle endpoints report rate limits
+      double price = 0.0;
+      double percent = 0.0;
+      bool executionDataValid = false;
 
+      if (quote.containsKey('c') && quote['c'] != 0 && quote['c'] != null) {
+        price = double.parse(quote['c'].toString());
+        percent = double.parse((quote['dp'] ?? 0.0).toString());
+        executionDataValid = true;
+      } else if (_allStocks.containsKey(targetedSymbol)) {
+        price = _allStocks[targetedSymbol]!['price'] ?? 0.0;
+        percent = _allStocks[targetedSymbol]!['dp'] ?? 0.0;
+        executionDataValid = true;
+      }
+
+      if (executionDataValid) {
+        final bool isBullish = percent >= 0;
         String displayName = _allStocks.containsKey(targetedSymbol)
             ? _allStocks[targetedSymbol]!['name']
             : targetedName;
@@ -393,7 +409,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // CHANGED: Injected the live dynamic display variable instead of a generic text string
                       Text("Welcome, $_displayName", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
                       const SizedBox(height: 4),
                       Row(

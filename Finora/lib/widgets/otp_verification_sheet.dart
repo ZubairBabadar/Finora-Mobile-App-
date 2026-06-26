@@ -82,7 +82,10 @@ class _OtpVerificationSheetState extends State<OtpVerificationSheet> {
 
     if (matchSuccessful) {
       if (mounted) {
-        Navigator.pop(context); // Clear sheet overlay safe window
+        // FIXED: Only trigger Navigator.pop if this view is running inside a modal stack overlay
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
         widget.onVerificationSuccess();
       }
     } else {
@@ -103,7 +106,7 @@ class _OtpVerificationSheetState extends State<OtpVerificationSheet> {
       child: Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
-          top: 32, left: 24, right: 24,
+          top: 16, left: 24, right: 24,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

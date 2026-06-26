@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../main.dart';
-import '../services/twelve_data_service.dart';
+import '../services/finnhub_service.dart';
 import '../services/watchlist_manager.dart';
 
 class WatchlistScreen extends StatefulWidget {

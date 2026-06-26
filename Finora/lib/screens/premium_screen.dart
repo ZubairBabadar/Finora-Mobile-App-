@@ -34,21 +34,24 @@ class _PremiumScreenState extends State<PremiumScreen> {
             ListTile(
                 title: const Text('USD - United States Dollar', style: TextStyle(color: Colors.white)),
                 onTap: () {
-                  setState(() { FinoraApp.globalCurrency = "USD (\$)"; });
+                  // FIX: Set the value via .value
+                  FinoraApp.globalCurrency.value = "USD (\$)";
                   Navigator.pop(context);
                 }
             ),
             ListTile(
                 title: const Text('EUR - Euro Region', style: TextStyle(color: Colors.white)),
                 onTap: () {
-                  setState(() { FinoraApp.globalCurrency = "EUR (€)"; });
+                  // FIX: Set the value via .value
+                  FinoraApp.globalCurrency.value = "EUR (€)";
                   Navigator.pop(context);
                 }
             ),
             ListTile(
                 title: const Text('GBP - Great British Pound', style: TextStyle(color: Colors.white)),
                 onTap: () {
-                  setState(() { FinoraApp.globalCurrency = "GBP (£)"; });
+                  // FIX: Set the value via .value
+                  FinoraApp.globalCurrency.value = "GBP (£)";
                   Navigator.pop(context);
                 }
             ),
@@ -267,7 +270,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     subtitle: 'Alter app baseline structural pricing valuations',
                     trailing: InkWell(
                         onTap: _showCurrencySelector,
-                        child: Text(FinoraApp.globalCurrency, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))
+                        // FIX: Read the inner string using .value
+                        child: Text(FinoraApp.globalCurrency.value, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))
                     ),
                   ),
                   const Divider(color: Color(0xFF22314F), height: 1),
