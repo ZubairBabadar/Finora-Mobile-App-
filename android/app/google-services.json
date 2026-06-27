@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "378713624345-ovsc2klr9pcifr42gpqmibvk7ebi7uuv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.finora",
+            "certificate_hash": "1108f5d3876f9829e4b2cc81433779c1448edf2a"
+          }
+        },
+        {
           "client_id": "378713624345-c819eg5075ukmji816cg406mtn32dqn9.apps.googleusercontent.com",
           "client_type": 3
         }

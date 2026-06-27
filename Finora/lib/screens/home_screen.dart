@@ -10,6 +10,7 @@ import '../main.dart';
 import '../services/finnhub_service.dart';
 import '../services/watchlist_manager.dart';
 import '../widgets/app_logo.dart';
+import '../portfolio_manager.dart'; // REQUIRED: Linking centralized state manager
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -372,6 +373,81 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
   }
 
+  // INTERACTIVE TRANSACTION OVERLAY SHEET
+  void _openQuickBuyModal(String symbol, String name, double currentPrice) {
+    final TextEditingController sharesController = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF131D31),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Buy $symbol', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(name, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                  ],
+                ),
+                Text(FinoraApp.formatPrice(currentPrice), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const Divider(color: Color(0xFF22314F), height: 24),
+            TextField(
+              controller: sharesController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Number of Shares',
+                labelStyle: TextStyle(color: Color(0xFF94A3B8)),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF22314F))),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF14B8A6))),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF14B8A6),
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                final double? inputShares = double.tryParse(sharesController.text);
+                if (inputShares != null && inputShares > 0) {
+                  final bool success = portfolioManager.executeTrade(
+                    type: 'BUY',
+                    symbol: symbol,
+                    companyName: name,
+                    shares: inputShares,
+                    currentPrice: currentPrice,
+                    context: context,
+                  );
+                  if (success) {
+                    Navigator.pop(context);
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a valid amount of shares.')),
+                  );
+                }
+              },
+              child: const Text('Confirm Purchase', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -580,7 +656,12 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                             Text('${isBullish ? "+" : ""}${percent.toStringAsFixed(2)}%', style: TextStyle(color: isBullish ? const Color(0xFF22C55E) : const Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold)),
                           ],
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 4),
+                        // ADDED: Quick Buy Trading Action Button
+                        IconButton(
+                          icon: const Icon(Icons.add_shopping_cart, color: Color(0xFF14B8A6), size: 20),
+                          onPressed: () => _openQuickBuyModal(symbol, stock['name'] ?? '', currentPrice),
+                        ),
                         IconButton(
                           icon: Icon(
                             isSaved ? Icons.star : Icons.star_border,

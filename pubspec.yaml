@@ -32,4 +32,4 @@ flutter:
 
   # REGISTER THE CUSTOM FINORA IMAGE ASSETS HERE:
   assets:
-    - assets/images/
+    - Finora/assets/images/

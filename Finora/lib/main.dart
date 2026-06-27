@@ -29,15 +29,20 @@ void main() async {
 class FinoraApp extends StatelessWidget {
   const FinoraApp({super.key});
 
-  // FIX: Converted to ValueNotifier to support real-time reactive UI updates across the navigation stack
+  // Converted to ValueNotifier to support real-time reactive UI updates across the navigation stack
   static final ValueNotifier<String> globalCurrency = ValueNotifier<String>("USD (\$)");
   static String globalCountryFilter = "United States";
 
-  static String formatPrice(double baseUsdPrice) {
+  // FIXED: Added an optional 'isNativeEur' flag so that your Portfolio data doesn't get double-converted
+  static String formatPrice(double basePrice, {bool isNativeEur = false}) {
+    if (isNativeEur) {
+      return '€${basePrice.toStringAsFixed(2)}';
+    }
+
     double conversionRate = 1.0;
     String symbol = '\$';
 
-    // FIX: Extracted current value from the notifier wrapper
+    // Extracted current value from the notifier wrapper
     final String currentCurrencySelection = globalCurrency.value;
 
     if (currentCurrencySelection.contains('EUR')) {
@@ -48,7 +53,7 @@ class FinoraApp extends StatelessWidget {
       symbol = '£';
     }
 
-    double finalPrice = baseUsdPrice * conversionRate;
+    double finalPrice = basePrice * conversionRate;
     return '$symbol${finalPrice.toStringAsFixed(2)}';
   }
 
@@ -98,7 +103,14 @@ class AuthGate extends StatelessWidget {
               .snapshots(),
           builder: (context, otpSnapshot) {
             // Display loading blocker while retrieving server timestamps/status data
-            if (!otpSnapshot.hasData) {
+            if (otpSnapshot.hasError) {
+              return const Scaffold(
+                backgroundColor: Color(0xFF0B1220),
+                body: Center(child: Text("Security check error. Please reload.")),
+              );
+            }
+
+            if (!otpSnapshot.hasData || !otpSnapshot.data!.exists) {
               return const Scaffold(
                 backgroundColor: Color(0xFF0B1220),
                 body: Center(child: CircularProgressIndicator(color: Color(0xFF14B8A6))),

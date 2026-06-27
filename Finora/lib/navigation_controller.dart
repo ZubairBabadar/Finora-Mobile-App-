@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
-import 'screens/news_screen.dart'; // Handles the market/news/trending layout tracking
+import 'screens/watchlist_screen.dart'; // Handles the market/news/trending layout tracking
 import 'screens/portfolio_screen.dart';
 import 'screens/premium_screen.dart';
 

@@ -217,12 +217,18 @@ class _AccountScreenState extends State<AccountScreen> {
               const SizedBox(height: 16),
 
               OutlinedButton.icon(
-                icon: Image.network(
+                // FIXED HERE: Replaces logo with a spinner contextually when initializing Google integration
+                icon: _isCheckingAvailability
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Image.network(
                   'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/24px-Google_%22G%22_logo.svg.png',
                   height: 18,
                   errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, color: Colors.white),
                 ),
-                label: const Text('Continue with Google', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                label: Text(
+                  _isCheckingAvailability ? 'Connecting to Google...' : 'Continue with Google',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 54),
                   side: const BorderSide(color: Color(0xFF22314F)),
@@ -268,11 +274,16 @@ class _AccountScreenState extends State<AccountScreen> {
     try {
       final googleSignIn = GoogleSignIn.instance;
       final GoogleSignInAccount googleUser = await googleSignIn.authenticate();
+
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
       final String? idToken = googleAuth.idToken;
 
       final List<String> targetScopes = ['email', 'profile'];
-      final GoogleSignInClientAuthorization clientAuthorization = await googleUser.authorizationClient.authorizeScopes(targetScopes);
+
+      final GoogleSignInClientAuthorization clientAuthorization =
+          await googleUser.authorizationClient.authorizationForScopes(targetScopes) ??
+              await googleUser.authorizationClient.authorizeScopes(targetScopes);
+
       final String accessToken = clientAuthorization.accessToken;
 
       final OAuthCredential credential = GoogleAuthProvider.credential(
