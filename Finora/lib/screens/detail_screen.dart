@@ -4,6 +4,8 @@ import 'dart:math';
 import '../widgets/app_logo.dart';
 import '../main.dart';
 import '../services/finnhub_service.dart';
+import '../portfolio_manager.dart'; // REQUIRED: Import your portfolioManager pipeline
+import '../widgets/trade_sheet.dart'; // REQUIRED: Link your trade verification layout panel
 
 class StockDetailScreen extends StatefulWidget {
   const StockDetailScreen({super.key});
@@ -330,16 +332,64 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF22C55E), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                    onPressed: () {},
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF22C55E),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                    ),
+                    onPressed: () {
+                      // FIXED: Open modal confirmation slide drawer for BUY trades
+                      showModalBottomSheet(
+                        context: context,
+                        backgroundColor: const Color(0xFF131D31),
+                        isScrollControlled: true,
+                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                        builder: (context) => TradeSheet(
+                          symbol: stockData['symbol'],
+                          companyName: stockData['name'],
+                          currentPrice: _currentLivePrice,
+                          tradeType: 'BUY',
+                        ),
+                      );
+                    },
                     child: const Text('BUY IN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                    onPressed: () {},
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEF4444),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                    ),
+                    onPressed: () {
+                      // FIXED: Validate allocation inventory position before rendering a LIQUIDATE modal
+                      final bool hasInventory = portfolioManager.holdings.any((h) => h.symbol == stockData['symbol']);
+
+                      if (!hasInventory) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: const Color(0xFFEF4444),
+                            content: Text("Liquidation Denied: No active shares owned for ${stockData['symbol']}"),
+                          ),
+                        );
+                        return;
+                      }
+
+                      showModalBottomSheet(
+                        context: context,
+                        backgroundColor: const Color(0xFF131D31),
+                        isScrollControlled: true,
+                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+                        builder: (context) => TradeSheet(
+                          symbol: stockData['symbol'],
+                          companyName: stockData['name'],
+                          currentPrice: _currentLivePrice,
+                          tradeType: 'LIQUIDATE',
+                        ),
+                      );
+                    },
                     child: const Text('LIQUIDATE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
                 ),

@@ -68,7 +68,7 @@ class Holding {
 }
 
 class PortfolioManager extends ChangeNotifier {
-  double _buyingPower = 5000.00; // Default wallet starting capital fallback
+  double _buyingPower = 0.00; // FIXED: Initialized default starting wallet balance to exactly 0.00
   List<Holding> _holdings = [];
   List<Transaction> _transactions = [];
 
@@ -98,7 +98,7 @@ class PortfolioManager extends ChangeNotifier {
   double get totalPnL => totalStockValue - totalInvested;
 
   void _resetLocalState() {
-    _buyingPower = 5000.00;
+    _buyingPower = 0.00; // FIXED: Set fallback allocation state to exactly 0.00 on logout
     _holdings = [];
     _transactions = [];
     notifyListeners();
@@ -113,7 +113,7 @@ class PortfolioManager extends ChangeNotifier {
       final doc = await _firestore.collection('users').doc(user.uid).collection('portfolio').doc('data').get();
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
-        _buyingPower = (data['buyingPower'] ?? 5000.00).toDouble();
+        _buyingPower = (data['buyingPower'] ?? 0.00).toDouble(); // FIXED: Decoupled 5000.00 cloud fallback assignment
 
         if (data['holdings'] != null) {
           _holdings = (data['holdings'] as List).map((h) => Holding.fromMap(h)).toList();
@@ -122,6 +122,13 @@ class PortfolioManager extends ChangeNotifier {
           _transactions = (data['transactions'] as List).map((t) => Transaction.fromMap(t)).toList();
         }
         notifyListeners();
+      } else {
+        // FIXED: Explicitly initialize new database profiles with 0.00 capital values instantly
+        _buyingPower = 0.00;
+        _holdings = [];
+        _transactions = [];
+        notifyListeners();
+        saveUserDataToCloud();
       }
     } catch (e) {
       debugPrint("Error fetching cloud portfolio values: $e");

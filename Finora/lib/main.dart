@@ -7,6 +7,7 @@ import 'firebase_options.dart';
 import 'navigation_controller.dart';
 import 'screens/detail_screen.dart';
 import 'services/watchlist_manager.dart';
+import 'portfolio_manager.dart';
 import 'screens/account_screen.dart';
 import 'widgets/otp_verification_sheet.dart';
 
@@ -157,6 +158,10 @@ class AuthGate extends StatelessWidget {
 
             // LAYER 3: Only clear through to internal views once security token validation returns true
             WatchlistManager.initializeWatchlist();
+
+            // FIXED: Explicitly force-sync the user's isolated portfolio state upon entering application views
+            portfolioManager.loadUserDataFromCloud();
+
             return const NavigationController();
           },
         );

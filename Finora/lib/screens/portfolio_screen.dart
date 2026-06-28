@@ -13,6 +13,16 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   String _selectedTimeframe = '1W';
   String _selectedFundingSource = 'Bank Account';
 
+  // Color palette matching your asset allocation design theme
+  final List<Color> _chartColors = [
+    const Color(0xFF2563EB), // Blue
+    const Color(0xFF8B5CF6), // Purple
+    const Color(0xFF06B6D4), // Cyan
+    const Color(0xFFF59E0B), // Orange
+    const Color(0xFF10B981), // Green
+    const Color(0xFFEC4899), // Pink
+  ];
+
   // Helper method that outputs custom plotting feeds mixed with live calculations
   List<FlSpot> _getDynamicChartSpots() {
     double currentTotal = portfolioManager.totalPortfolioValue;
@@ -74,7 +84,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
               const Text('Select Payment Method', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _selectedFundingSource,
+                initialValue: _selectedFundingSource,
                 dropdownColor: const Color(0xFF131D31),
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
@@ -155,6 +165,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 _buildHeaderMetrics(isPnLPositive),
                 const SizedBox(height: 20),
                 _buildPerformanceChartCard(),
+                const SizedBox(height: 20),
+                _buildAssetAllocationCard(), // ADDED: Embedded functional asset allocation chart module
                 const SizedBox(height: 24),
                 const Text(
                   'Your Holdings',
@@ -329,6 +341,105 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  // ADDED: Functional presentation layer mapping live Firestore metrics onto a custom allocation wheel
+  Widget _buildAssetAllocationCard() {
+    final holdings = portfolioManager.holdings;
+    final double totalStocksValue = portfolioManager.totalStockValue;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF131D31),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF22314F)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Asset Allocation',
+            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+          if (holdings.isEmpty) ...[
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 30),
+                child: Text(
+                  'No stock assets owned yet.',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                ),
+              ),
+            ),
+          ] else ...[
+            SizedBox(
+              height: 160,
+              child: PieChart(
+                PieChartData(
+                  sectionsSpace: 2,
+                  centerSpaceRadius: 55,
+                  startDegreeOffset: 270,
+                  sections: List.generate(holdings.length, (index) {
+                    final holding = holdings[index];
+                    final double assetValue = holding.shares * holding.currentPrice;
+                    final color = _chartColors[index % _chartColors.length];
+
+                    return PieChartSectionData(
+                      color: color,
+                      value: assetValue,
+                      radius: 18,
+                      showTitle: false,
+                    );
+                  }),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 3.8,
+                mainAxisSpacing: 6,
+                crossAxisSpacing: 12,
+              ),
+              itemCount: holdings.length,
+              itemBuilder: (context, index) {
+                final holding = holdings[index];
+                final color = _chartColors[index % _chartColors.length];
+                final double percentage = totalStocksValue > 0
+                    ? (holding.shares * holding.currentPrice / totalStocksValue) * 100
+                    : 0.0;
+
+                return Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      holding.symbol,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${percentage.toStringAsFixed(1)}%',
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
         ],
       ),
     );
