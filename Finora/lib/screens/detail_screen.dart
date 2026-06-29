@@ -4,8 +4,8 @@ import 'dart:math';
 import '../widgets/app_logo.dart';
 import '../main.dart';
 import '../services/finnhub_service.dart';
-import '../portfolio_manager.dart'; // REQUIRED: Import your portfolioManager pipeline
-import '../widgets/trade_sheet.dart'; // REQUIRED: Link your trade verification layout panel
+import '../portfolio_manager.dart';
+import '../widgets/trade_sheet.dart';
 
 class StockDetailScreen extends StatefulWidget {
   const StockDetailScreen({super.key});
@@ -24,6 +24,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   // --- TIMEFRAME FILTERS ---
   String _selectedTimeframe = '1D';
 
+  // --- CHART RENDER TYPE TOGGLE ---
+  bool _isCandlestickMode = false;
+  int? _touchedCandleIndex;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -37,7 +41,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
 
   Future<void> _loadLiveChartAndData(String symbol) async {
     if (!mounted) return;
-    setState(() => _isLoadingGraph = true);
+    setState(() {
+      _isLoadingGraph = true;
+      _touchedCandleIndex = null;
+    });
 
     String resolution = '5';
     if (_selectedTimeframe == '1W') resolution = '60';
@@ -66,7 +73,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     int size = timeframe == '1D' ? 6 : (timeframe == '1W' ? 7 : 12);
     List<double> fallback = [basePrice];
     for (int i = 1; i < size; i++) {
-      double changePercent = (rand.nextDouble() * 0.04) - 0.018;
+      double changePercent = (rand.nextDouble() * 0.03) - 0.012;
       fallback.add(fallback.last * (1 + changePercent));
     }
     return fallback;
@@ -77,7 +84,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   double get _maxPrice => _chartPoints.isNotEmpty ? _chartPoints.reduce(max) : 200.0;
   double get _avgPrice => _chartPoints.isNotEmpty ? _chartPoints.reduce((a, b) => a + b) / _chartPoints.length : 150.0;
 
-  // --- PREMIUM SYSTEM: BULLETPROOF METRIC POSITION DISTRIBUTOR ---
   String _getXAxisLabelText(double value, double maxVal) {
     if (value == 0) {
       return _selectedTimeframe == '1D' ? '9 AM' : (_selectedTimeframe == '1W' ? 'Mon' : 'Wk 1');
@@ -108,13 +114,11 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     final Color trendColor = isBullish ? const Color(0xFF22C55E) : const Color(0xFFEF4444);
     final List<dynamic> newsItems = stockData['newsList'] ?? [];
 
-    // Safe mathematical paddings
     final double computedMinY = _minPrice - (_minPrice * 0.015);
     final double computedMaxY = _maxPrice + (_maxPrice * 0.015);
     final double verticalSpread = computedMaxY - computedMinY;
     final double safeHorizontalInterval = verticalSpread > 0 ? verticalSpread / 3 : 1.0;
 
-    // Fixed step intervals calculated directly from data coordinates length boundaries
     final double xMaxLimit = _chartPoints.length > 1 ? (_chartPoints.length - 1).toDouble() : 1.0;
     final double safeVerticalInterval = xMaxLimit / 3;
 
@@ -134,7 +138,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // HEADING PRICE AND OVERVIEW
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -154,7 +157,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             ),
             const SizedBox(height: 24),
 
-            // TIMEFRAME CONTROLS PILL BAR WIDGET
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
@@ -195,13 +197,32 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             ),
             const SizedBox(height: 20),
 
-            // DYNAMIC INFORMATIVE FINANCIAL CHART
-            const Text("Historical Interval Trends", style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w500)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Historical Interval Trends", style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w500)),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: Icon(
+                    _isCandlestickMode ? Icons.show_chart : Icons.candlestick_chart,
+                    color: const Color(0xFF14B8A6),
+                    size: 24,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isCandlestickMode = !_isCandlestickMode;
+                    });
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
+
             Container(
-              height: 260,
+              height: 270,
               width: double.infinity,
-              padding: const EdgeInsets.only(right: 20, top: 25, bottom: 10, left: 10),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
               decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
                   border: Border.all(color: const Color(0xFF334155)),
@@ -209,6 +230,42 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               ),
               child: _isLoadingGraph
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFF14B8A6)))
+                  : _isCandlestickMode
+                  ? GestureDetector(
+                onPanUpdate: (details) {
+                  final RenderBox box = context.findRenderObject() as RenderBox;
+                  final Offset localPos = box.globalToLocal(details.globalPosition);
+                  double usableWidth = box.size.width - 76;
+                  double relativeX = localPos.dx - 55;
+                  if (relativeX >= 0 && relativeX <= usableWidth) {
+                    int index = ((relativeX / usableWidth) * (_chartPoints.length - 1)).round();
+                    if (index >= 0 && index < _chartPoints.length) {
+                      setState(() => _touchedCandleIndex = index);
+                    }
+                  }
+                },
+                onPanEnd: (_) => setState(() => _touchedCandleIndex = null),
+                onTapDown: (details) {
+                  double usableWidth = context.size!.width - 76;
+                  double relativeX = details.localPosition.dx - 45;
+                  if (relativeX >= 0 && relativeX <= usableWidth) {
+                    int index = ((relativeX / usableWidth) * (_chartPoints.length - 1)).round();
+                    if (index >= 0 && index < _chartPoints.length) {
+                      setState(() => _touchedCandleIndex = index);
+                    }
+                  }
+                },
+                child: CustomPaint(
+                  size: Size.infinite,
+                  painter: CrystalCandlestickPainter(
+                    prices: _chartPoints,
+                    minY: computedMinY,
+                    maxY: computedMaxY,
+                    timeframe: _selectedTimeframe,
+                    selectedIndex: _touchedCandleIndex,
+                  ),
+                ),
+              )
                   : LineChart(
                 LineChartData(
                   minY: computedMinY,
@@ -230,12 +287,12 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 30,
-                        interval: safeVerticalInterval, // FIX: Locked to mathematical grid steps to eliminate text replication duplication
+                        reservedSize: 24,
+                        interval: safeVerticalInterval,
                         getTitlesWidget: (value, meta) {
                           final label = _getXAxisLabelText(value, xMaxLimit);
                           return Padding(
-                            padding: const EdgeInsets.only(top: 10.0),
+                            padding: const EdgeInsets.only(top: 8.0),
                             child: Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
                           );
                         },
@@ -244,8 +301,8 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 55,
-                        interval: safeHorizontalInterval, // FIX: Tied directly to the grid vertical spread metrics to stop text overlapping
+                        reservedSize: 52,
+                        interval: safeHorizontalInterval,
                         getTitlesWidget: (value, meta) {
                           return Text('\$${value.toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11));
                         },
@@ -311,7 +368,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             ),
             const SizedBox(height: 20),
 
-            // METRICS ROW
             if (!_isLoadingGraph)
               Container(
                 padding: const EdgeInsets.all(16),
@@ -327,7 +383,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               ),
             const SizedBox(height: 24),
 
-            // INTERACTIVE SIMULATOR TILES
             Row(
               children: [
                 Expanded(
@@ -338,7 +393,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                     ),
                     onPressed: () {
-                      // FIXED: Open modal confirmation slide drawer for BUY trades
                       showModalBottomSheet(
                         context: context,
                         backgroundColor: const Color(0xFF131D31),
@@ -364,7 +418,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                     ),
                     onPressed: () {
-                      // FIXED: Validate allocation inventory position before rendering a LIQUIDATE modal
                       final bool hasInventory = portfolioManager.holdings.any((h) => h.symbol == stockData['symbol']);
 
                       if (!hasInventory) {
@@ -397,7 +450,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             ),
             const SizedBox(height: 32),
 
-            // --- LIVE TRENDING NEWS SUBSECTION ---
             Text(
               "Trending Live News: ${stockData['symbol']}",
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
@@ -503,4 +555,162 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       ],
     );
   }
+}
+
+class CrystalCandlestickPainter extends CustomPainter {
+  final List<double> prices;
+  final double minY;
+  final double maxY;
+  final String timeframe;
+  final int? selectedIndex;
+
+  CrystalCandlestickPainter({
+    required this.prices,
+    required this.minY,
+    required this.maxY,
+    required this.timeframe,
+    this.selectedIndex,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (prices.length < 2) return;
+
+    // Fixed layout paddings to eliminate layout issues and keep text highly legible
+    const double leftPadding = 54.0;  // Wider margin to prevent text collisions on numbers like $147
+    const double bottomPadding = 24.0; // Dynamic headroom for timeframe labels
+    const double rightPadding = 12.0;
+    const double topPadding = 14.0;
+
+    final double drawableWidth = size.width - leftPadding - rightPadding;
+    final double drawableHeight = size.height - topPadding - bottomPadding;
+
+    final Paint gridPaint = Paint()
+      ..color = const Color(0xFF334155).withValues(alpha: 0.7)
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+
+    // --- DRAW BACKGROUND HORIZONTAL GRID LINES ---
+    int horizontalLines = 3;
+    for (int i = 0; i <= horizontalLines; i++) {
+      double y = topPadding + (drawableHeight / horizontalLines) * i;
+      canvas.drawLine(Offset(leftPadding, y), Offset(size.width - rightPadding, y), gridPaint);
+
+      double priceValue = maxY - ((maxY - minY) / horizontalLines) * i;
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: '\$${priceValue.toStringAsFixed(0)}',
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w500),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      textPainter.paint(canvas, Offset(8, y - (textPainter.height / 2)));
+    }
+
+    // --- TIMEFRAME X-AXIS INTERVAL DISTRIBUTION SYSTEM ---
+    List<String> xLabels = [];
+    if (timeframe == '1D') xLabels = ['9 AM', '12 PM', '3 PM', 'Close'];
+    if (timeframe == '1W') xLabels = ['Mon', 'Wed', 'Fri', 'Sun'];
+    if (timeframe == '1M') xLabels = ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'];
+
+    for (int i = 0; i < xLabels.length; i++) {
+      double relativeX = (drawableWidth / (xLabels.length - 1)) * i;
+      double x = leftPadding + relativeX;
+
+      final textPainter = TextPainter(
+        text: TextSpan(
+            text: xLabels[i],
+            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w500)
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      textPainter.paint(canvas, Offset(x - (textPainter.width / 2), size.height - textPainter.height - 2));
+    }
+
+    // --- DRAW HIGH-DENSITY CANDLES ---
+    final double widthBetweenPoints = drawableWidth / (prices.length - 1);
+    final Paint wickPaint = Paint()..strokeWidth = 1.5; // Cleaner, sharper wick line accent
+    final Paint bodyPaint = Paint()..style = PaintingStyle.fill;
+
+    for (int i = 0; i < prices.length; i++) {
+      double open = i == 0 ? prices[i] : prices[i - 1];
+      double close = prices[i];
+
+      double spread = (open - close).abs();
+      double dynamicWickSpread = spread == 0 ? (open * 0.003) : spread * 0.40;
+
+      double high = max(open, close) + dynamicWickSpread;
+      double low = min(open, close) - dynamicWickSpread;
+
+      bool isGreen = close >= open;
+      Color candleColor = isGreen ? const Color(0xFF22C55E) : const Color(0xFFEF4444);
+
+      wickPaint.color = candleColor;
+      bodyPaint.color = candleColor;
+
+      double xPos = leftPadding + (i * widthBetweenPoints);
+
+      double openY = topPadding + drawableHeight - (((open - minY) / (maxY - minY)) * drawableHeight);
+      double closeY = topPadding + drawableHeight - (((close - minY) / (maxY - minY)) * drawableHeight);
+      double highY = topPadding + drawableHeight - (((high - minY) / (maxY - minY)) * drawableHeight);
+      double lowY = topPadding + drawableHeight - (((low - minY) / (maxY - minY)) * drawableHeight);
+
+      if ((openY - closeY).abs() < 2.5) {
+        closeY = isGreen ? openY - 2.5 : openY + 2.5;
+      }
+
+      // Draw Candlestick Wick Line
+      canvas.drawLine(Offset(xPos, highY), Offset(xPos, lowY), wickPaint);
+
+      // --- SLIMMER CANDLE DESIGN MATRIX ---
+      double candleBodyWidth = max(7.0, widthBetweenPoints * 0.42);
+      Rect bodyRect = Rect.fromLTRB(
+          xPos - (candleBodyWidth / 2),
+          min(openY, closeY),
+          xPos + (candleBodyWidth / 2),
+          max(openY, closeY)
+      );
+      canvas.drawRect(bodyRect, bodyPaint);
+
+      // --- HOVER TOOLTIP CROSSHAIR RENDERING ---
+      if (selectedIndex != null && selectedIndex == i) {
+        final crosshairPaint = Paint()
+          ..color = const Color(0xFF14B8A6).withValues(alpha: 0.5)
+          ..strokeWidth = 1.0
+          ..style = PaintingStyle.stroke;
+        canvas.drawLine(Offset(xPos, topPadding), Offset(xPos, topPadding + drawableHeight), crosshairPaint);
+
+        final tooltipTextPainter = TextPainter(
+          text: TextSpan(
+            text: '\$${close.toStringAsFixed(2)}',
+            style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+
+        double tooltipWidth = tooltipTextPainter.width + 14;
+        double tooltipHeight = tooltipTextPainter.height + 6;
+        double tooltipX = (xPos + tooltipWidth > size.width) ? xPos - tooltipWidth - 6 : xPos + 6;
+        double tooltipY = min(openY, closeY) - tooltipHeight - 6;
+        if (tooltipY < topPadding) tooltipY = topPadding + 4;
+
+        RRect tooltipBox = RRect.fromRectAndRadius(
+            Rect.fromLTWH(tooltipX, tooltipY, tooltipWidth, tooltipHeight),
+            const Radius.circular(5)
+        );
+
+        final tooltipBgPaint = Paint()..color = const Color(0xFF14B8A6);
+        canvas.drawRRect(tooltipBox, tooltipBgPaint);
+        tooltipTextPainter.paint(canvas, Offset(tooltipX + 7, tooltipY + 3));
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CrystalCandlestickPainter oldDelegate) =>
+      oldDelegate.prices != prices ||
+          oldDelegate.minY != minY ||
+          oldDelegate.maxY != maxY ||
+          oldDelegate.timeframe != timeframe ||
+          oldDelegate.selectedIndex != selectedIndex;
 }

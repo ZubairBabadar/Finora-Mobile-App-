@@ -4,13 +4,14 @@ import 'package:geocoding/geocoding.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // REQUIRED: Extracting current UID context
-import 'package:cloud_firestore/cloud_firestore.dart'; // REQUIRED: Retrieving the unique username doc
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../main.dart';
 import '../services/finnhub_service.dart';
 import '../services/watchlist_manager.dart';
 import '../widgets/app_logo.dart';
-import '../portfolio_manager.dart'; // REQUIRED: Linking centralized state manager
+import '../widgets/stock_logo.dart'; // REQUIRED: Import your LogoKit widget
+import '../portfolio_manager.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,14 +28,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   String _selectedCountry = 'US';
   String? _lastUpdatedTimestamp;
   String? _apiErrorMessage;
-
-  // State property to hold the user's customized username string
   String _displayName = "Investor";
-
-  // Track if location has already been initialized to prevent infinite loops
   bool _isLocationInitialized = false;
 
-  // Active Production Credentials Shared Globally
   static const String _token = "d8qhif1r01qr03nj4shgd8qhif1r01qr03nj4si0";
 
   final Map<String, String> _countryOptions = {
@@ -82,7 +78,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
 
   Map<String, Map<String, dynamic>> _allStocks = {};
 
-  // REQUIRED: Keeps screen cached completely within IndexedStack layout structures
   @override
   bool get wantKeepAlive => true;
 
@@ -91,10 +86,9 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     super.initState();
     _allStocks = Map.from(_regionalMarkets[_selectedCountry]!);
     _handleLocationPermission();
-    _fetchFirestoreUsername(); // Triggers data ingestion loop for the user's profile info
+    _fetchFirestoreUsername();
   }
 
-  // Queries the specific Firestore document linked to the user's Auth token UID
   Future<void> _fetchFirestoreUsername() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -248,7 +242,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     _fetchLivePrices();
   }
 
-  // FIXED & IMPROVED: Advanced multi-exchange name translator with strict verification and pop-up error feedback hooks
   Future<void> _performDynamicSearch(String rawQuery) async {
     final query = rawQuery.trim();
     if (query.isEmpty) return;
@@ -270,7 +263,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         targetedName = _allStocks[queryUpper]!['name'] ?? targetedName;
         assetFoundInSearch = true;
       } else {
-        // Build the query to pull global names while passing regional filtering hints
         String searchUrlString = "https://finnhub.io/api/v1/search?q=${Uri.encodeComponent(query)}&token=$_token";
         if (_selectedCountry != 'GLOBAL') {
           searchUrlString += "&exchange=$_selectedCountry";
@@ -283,7 +275,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
           if (searchData.containsKey('result') && (searchData['result'] as List).isNotEmpty) {
             final results = searchData['result'] as List;
 
-            // Loop through results to prioritize the best matched ticker or company description name matching your parameters
             for (var item in results) {
               String currentSymbol = (item['symbol'] ?? '').toString().toUpperCase();
               String currentDesc = (item['description'] ?? '').toString().toUpperCase();
@@ -317,7 +308,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   break;
                 }
               } else {
-                // Global view allows dynamic matching down the cascade safely
                 targetedSymbol = currentSymbol;
                 targetedName = item['description'] ?? targetedName;
                 assetFoundInSearch = true;
@@ -325,7 +315,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
               }
             }
 
-            // Ultimate generic fallback inside the selected exchange window if country-specific suffixes are absent
             if (targetedSymbol == null && results.isNotEmpty) {
               final bestMatch = results[0];
               targetedSymbol = bestMatch['symbol'];
@@ -336,7 +325,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         }
       }
 
-      // If the asset does not exist or wasn't resolved by the API, dismiss loading and show prompt immediately
       if (!assetFoundInSearch || targetedSymbol == null) {
         if (context.mounted) Navigator.pop(context);
         if (context.mounted) {
@@ -376,7 +364,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
       double percent = 0.0;
       bool executionDataValid = false;
 
-      // Handle cases where global quotes return 0 or empty structures safely via generic mock generation to prevent app crashes
       if (quote.containsKey('c') && quote['c'] != 0 && quote['c'] != null) {
         price = double.parse(quote['c'].toString());
         percent = double.parse((quote['dp'] ?? 0.0).toString());
@@ -386,7 +373,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
         percent = _allStocks[targetedSymbol]!['dp'] ?? 0.0;
         executionDataValid = true;
       } else {
-        // Fallback for global assets that don't return live prices on standard tracking streams
         price = 120.50;
         percent = 1.25;
         executionDataValid = true;
@@ -414,7 +400,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
     }
   }
 
-  // INTERACTIVE TRANSACTION OVERLAY SHEET
   void _openQuickBuyModal(String symbol, String name, double currentPrice) {
     final TextEditingController sharesController = TextEditingController();
     showModalBottomSheet(
@@ -684,6 +669,13 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     onTap: () => _performDynamicSearch(symbol),
+
+                    // FIXED & INTEGRATED: Spec-compliant StockLogo implementation nested here!
+                    leading: StockLogo(
+                      symbol: symbol,
+                      size: 40,
+                    ),
+
                     title: Text(symbol, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
                     subtitle: Text(stock['name'] ?? '', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
                     trailing: Row(
@@ -698,7 +690,6 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                           ],
                         ),
                         const SizedBox(width: 4),
-                        // ADDED: Quick Buy Trading Action Button
                         IconButton(
                           icon: const Icon(Icons.add_shopping_cart, color: Color(0xFF14B8A6), size: 20),
                           onPressed: () => _openQuickBuyModal(symbol, stock['name'] ?? '', currentPrice),

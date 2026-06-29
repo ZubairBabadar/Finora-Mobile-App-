@@ -9,7 +9,7 @@ This project was developed as a comprehensive practical security and software en
 # 🎓 Academic Credentials
 
 * **Developer:** Zubair Hassan Badar Babadar
-* **Enrolled Program:** IT Security (B.Sc.)
+* **Enrolled Program:** Software Engineering (B.Sc.)
 * **Current Semester:** 4th Semester (Group A+B)
 * **University Matriculation Number:** 26710250
 * **Institution:** University of Europe for Applied Sciences

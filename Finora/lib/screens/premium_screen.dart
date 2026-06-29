@@ -14,6 +14,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
   bool _pushNotifications = true;
   bool _biometricLock = false;
   String _selectedTierPlan = "Monthly Strategy";
+  bool _isDeleting = false; // Flag to gate UI interactions during deletion
 
   void _showCurrencySelector() {
     showModalBottomSheet(
@@ -34,7 +35,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
             ListTile(
                 title: const Text('USD - United States Dollar', style: TextStyle(color: Colors.white)),
                 onTap: () {
-                  // FIX: Set the value via .value
                   FinoraApp.globalCurrency.value = "USD (\$)";
                   Navigator.pop(context);
                 }
@@ -42,7 +42,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
             ListTile(
                 title: const Text('EUR - Euro Region', style: TextStyle(color: Colors.white)),
                 onTap: () {
-                  // FIX: Set the value via .value
                   FinoraApp.globalCurrency.value = "EUR (€)";
                   Navigator.pop(context);
                 }
@@ -50,7 +49,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
             ListTile(
                 title: const Text('GBP - Great British Pound', style: TextStyle(color: Colors.white)),
                 onTap: () {
-                  // FIX: Set the value via .value
                   FinoraApp.globalCurrency.value = "GBP (£)";
                   Navigator.pop(context);
                 }
@@ -58,7 +56,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
           ],
         ),
       ),
-    ).then((_) => setState(() {}));
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   void _triggerSyncToast() {
@@ -141,7 +141,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
     return GestureDetector(
       onTap: () {
         setModalState(() { _selectedTierPlan = title; });
-        setState(() { _selectedTierPlan = title; });
+        if (mounted) setState(() { _selectedTierPlan = title; });
       },
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
@@ -173,6 +173,140 @@ class _PremiumScreenState extends State<PremiumScreen> {
         ),
       ),
     );
+  }
+
+  // --- TYPE TO CONFIRM ACCOUNT DELETION SYSTEM ---
+  void _showDeleteAccountConfirmation() {
+    final TextEditingController confirmController = TextEditingController();
+    bool isConfirmEnabled = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF131D31),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0xFF22314F)),
+              ),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 28),
+                  SizedBox(width: 10),
+                  Text("Confirm Account Deletion", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "This action is permanent and completely irreversible. Your profile data and access settings will be completely purged.",
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Type 'DELETE' to confirm authorization:",
+                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: confirmController,
+                    cursorColor: const Color(0xFF14B8A6),
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      filled: true,
+                      fillColor: const Color(0xFF0B1220),
+                      hintText: "DELETE",
+                      hintStyle: const TextStyle(color: Color(0xFF475569), fontSize: 13),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFF22314F)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFF14B8A6)),
+                      ),
+                    ),
+                    onChanged: (val) {
+                      setStateDialog(() {
+                        isConfirmEnabled = val.trim() == "DELETE";
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actionsPadding: const EdgeInsets.only(bottom: 16, right: 16, left: 16),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    Future.delayed(const Duration(milliseconds: 300), () => confirmController.dispose());
+                  },
+                  child: const Text("Cancel", style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isConfirmEnabled ? const Color(0xFFEF4444) : const Color(0xFF1E293B),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                  onPressed: isConfirmEnabled
+                      ? () {
+                    Navigator.of(dialogContext).pop();
+                    // Keeps controller valid for the length of the slide/fade routing animation frame
+                    Future.delayed(const Duration(milliseconds: 300), () => confirmController.dispose());
+                    _executeAccountPurge();
+                  }
+                      : null,
+                  child: const Text("Delete Forever", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- SAFE ASYNC FIREBASE PURGE EXECUTION ---
+  Future<void> _executeAccountPurge() async {
+    if (!mounted) return;
+    setState(() => _isDeleting = true);
+
+    // Snapshot Messenger parameters prior to any asynchronous context dropping
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await user.delete();
+      }
+
+      // STOP: If the user stream dropped and AuthGate popped this widget, exit cleanly.
+      if (!mounted) return;
+
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isDeleting = false);
+
+      String errorMessage = e.toString();
+      if (e is FirebaseAuthException && e.code == 'requires-recent-login') {
+        errorMessage = "Security Gate: Please log out and sign back in to re-authenticate before attempting account erasure.";
+      }
+
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFEF4444),
+          content: Text(errorMessage),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   @override
@@ -248,7 +382,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     subtitle: 'Configure real-time stock alert thresholds',
                     trailing: Switch(
                         value: _pushNotifications,
-                        onChanged: (val) => setState(() => _pushNotifications = val),
+                        onChanged: _isDeleting ? null : (val) => setState(() => _pushNotifications = val),
                         activeThumbColor: const Color(0xFF14B8A6)
                     ),
                   ),
@@ -259,7 +393,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     subtitle: 'Manage face/fingerprint credentials verification',
                     trailing: Switch(
                         value: _biometricLock,
-                        onChanged: (val) => setState(() => _biometricLock = val),
+                        onChanged: _isDeleting ? null : (val) => setState(() => _biometricLock = val),
                         activeThumbColor: const Color(0xFF14B8A6)
                     ),
                   ),
@@ -269,8 +403,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     title: 'Base Display Currency',
                     subtitle: 'Alter app baseline structural pricing valuations',
                     trailing: InkWell(
-                        onTap: _showCurrencySelector,
-                        // FIX: Read the inner string using .value
+                        onTap: _isDeleting ? null : _showCurrencySelector,
                         child: Text(FinoraApp.globalCurrency.value, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold))
                     ),
                   ),
@@ -279,12 +412,13 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     icon: Icons.refresh,
                     title: 'Force API Refresh',
                     subtitle: 'Clear cached JSON states from endpoint right now',
-                    trailing: IconButton(icon: const Icon(Icons.sync, color: Color(0xFF14B8A6)), onPressed: _triggerSyncToast),
+                    trailing: IconButton(icon: const Icon(Icons.sync, color: Color(0xFF14B8A6)), onPressed: _isDeleting ? null : _triggerSyncToast),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
+
             // SECURE LOGOUT ACTION
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
@@ -295,10 +429,29 @@ class _PremiumScreenState extends State<PremiumScreen> {
               ),
               icon: const Icon(Icons.logout, color: Color(0xFFEF4444)),
               label: const Text('Log Out from Finora', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 15)),
-              onPressed: () async {
+              onPressed: _isDeleting ? null : () async {
                 await FirebaseAuth.instance.signOut();
-                // No navigation needed, AuthGate handles it!
               },
+            ),
+
+            const SizedBox(height: 12),
+
+            // DANGER ZONE DELETION TRIGGER BUTTON
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                  side: BorderSide(color: const Color(0xFFEF4444).withValues(alpha: 0.3), width: 1.2),
+                  minimumSize: const Size(double.infinity, 54),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+              ),
+              icon: _isDeleting
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Color(0xFFEF4444), strokeWidth: 2))
+                  : const Icon(Icons.delete_forever, color: Color(0xFFEF4444)),
+              label: Text(
+                _isDeleting ? 'Processing Account Purge...' : 'Delete Secure Account',
+                style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              onPressed: _isDeleting ? null : _showDeleteAccountConfirmation,
             ),
             const SizedBox(height: 20),
           ],
