@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import '../widgets/stock_logo.dart';
 import '../main.dart';
 import '../services/finnhub_service.dart';
 import '../services/watchlist_manager.dart';
-import '../portfolio_manager.dart'; // REQUIRED: Linking centralized state manager
+import '../portfolio_manager.dart';// REQUIRED: Linking centralized state manager
 
 class WatchlistScreen extends StatefulWidget {
   const WatchlistScreen({super.key});
@@ -329,6 +330,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> with SingleTickerProv
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         onTap: () => _navigateToDetail(symbol),
+                        leading: StockLogo(symbol: symbol, size: 40),
                         title: Text(
                           symbol,
                           style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
@@ -364,7 +366,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> with SingleTickerProv
                               ],
                             ),
                             const SizedBox(width: 4),
-                            // ADDED: Quick Buy Trading Action Button
+                            // QUICK BUY TRADING ACTION BUTTON
                             IconButton(
                               icon: const Icon(Icons.add_shopping_cart, color: Color(0xFF14B8A6), size: 20),
                               onPressed: () => _openQuickBuyModal(symbol, 'Global Market Security', currentPrice),

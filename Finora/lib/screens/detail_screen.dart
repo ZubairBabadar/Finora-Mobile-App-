@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dart:math';
 import '../widgets/app_logo.dart';
+import '../widgets/stock_logo.dart';
 import '../main.dart';
 import '../services/finnhub_service.dart';
 import '../portfolio_manager.dart';
@@ -141,14 +142,20 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   children: [
-                    Text(stockData['name'], style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-                    const SizedBox(height: 4),
-                    Text(
-                        FinoraApp.formatPrice(_currentLivePrice),
-                        style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: trendColor)
+                    StockLogo(symbol: stockData['symbol'], size: 48),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(stockData['name'], style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                        const SizedBox(height: 4),
+                        Text(
+                            FinoraApp.formatPrice(_currentLivePrice),
+                            style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: trendColor)
+                        ),
+                      ],
                     ),
                   ],
                 ),

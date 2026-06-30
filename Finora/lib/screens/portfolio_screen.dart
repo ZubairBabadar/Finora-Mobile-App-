@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../widgets/stock_logo.dart';
+import '../services/finnhub_service.dart';
 import '../portfolio_manager.dart';
 
 class PortfolioScreen extends StatefulWidget {
@@ -12,6 +16,8 @@ class PortfolioScreen extends StatefulWidget {
 class _PortfolioScreenState extends State<PortfolioScreen> {
   String _selectedTimeframe = '1W';
   String _selectedFundingSource = 'Bank Account';
+
+  static const String _token = "d8qhif1r01qr03nj4shgd8qhif1r01qr03nj4si0";
 
   // Color palette matching your asset allocation design theme
   final List<Color> _chartColors = [
@@ -58,6 +64,52 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
           FlSpot(5, currentTotal * 0.99),
           FlSpot(6, currentTotal),
         ];
+    }
+  }
+
+  // Live navigation routing handler fetching real-time market data concurrently
+  Future<void> _navigateToDetail(String symbol) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFF14B8A6)),
+      ),
+    );
+
+    try {
+      final quote = await FinnhubService().fetchLiveQuote(symbol);
+      final today = DateTime.now().toString().substring(0, 10);
+      final weekAgo = DateTime.now().subtract(const Duration(days: 7)).toString().substring(0, 10);
+
+      final newsUrl = Uri.parse("https://finnhub.io/api/v1/company-news?symbol=$symbol&from=$weekAgo&to=$today&token=$_token");
+      final response = await http.get(newsUrl);
+
+      List<dynamic> parsedNewsList = [];
+      if (response.statusCode == 200) {
+        parsedNewsList = json.decode(response.body);
+      }
+
+      if (context.mounted) Navigator.pop(context);
+
+      if (quote.containsKey('c') && quote['c'] != 0 && quote['c'] != null) {
+        final double price = double.parse(quote['c'].toString());
+        final double percent = double.parse((quote['dp'] ?? 0.0).toString());
+        final bool isBullish = percent >= 0;
+
+        if (context.mounted) {
+          Navigator.pushNamed(context, '/stock-detail', arguments: {
+            'symbol': symbol,
+            'name': symbol, // Fallback safely to ticker identifier string
+            'usdPrice': price,
+            'change': '${isBullish ? "+" : ""}${percent.toStringAsFixed(2)}%',
+            'isBullish': isBullish,
+            'newsList': parsedNewsList
+          });
+        }
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
     }
   }
 
@@ -166,7 +218,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 const SizedBox(height: 20),
                 _buildPerformanceChartCard(),
                 const SizedBox(height: 20),
-                _buildAssetAllocationCard(), // ADDED: Embedded functional asset allocation chart module
+                _buildAssetAllocationCard(),
                 const SizedBox(height: 24),
                 const Text(
                   'Your Holdings',
@@ -346,7 +398,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     );
   }
 
-  // ADDED: Functional presentation layer mapping live Firestore metrics onto a custom allocation wheel
   Widget _buildAssetAllocationCard() {
     final holdings = portfolioManager.holdings;
     final double totalStocksValue = portfolioManager.totalStockValue;
@@ -477,35 +528,47 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         final bool isPositive = profitLoss >= 0;
 
         return Container(
-          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: const Color(0xFF131D31),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFF22314F)),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item.symbol, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 2),
-                  Text('${item.shares.toStringAsFixed(1)} shares', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-                ],
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _navigateToDetail(item.symbol),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    StockLogo(symbol: item.symbol, size: 40),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(item.symbol, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 2),
+                          Text('${item.shares.toStringAsFixed(1)} shares', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('€${currentVal.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${isPositive ? '+' : ''}€${profitLoss.toStringAsFixed(2)}',
+                          style: TextStyle(color: isPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    )
+                  ],
+                ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('€${currentVal.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${isPositive ? '+' : ''}€${profitLoss.toStringAsFixed(2)}',
-                    style: TextStyle(color: isPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              )
-            ],
+            ),
           ),
         );
       },

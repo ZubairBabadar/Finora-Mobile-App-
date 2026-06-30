@@ -42,4 +42,23 @@ class FinnhubService {
     }
     return [150.0, 155.2, 153.4, 158.9, 162.1, 160.5, 165.8]; // Safe UI fallback
   }
+
+  /// Pulls the company logo URL for a ticker from Finnhub's profile2 endpoint.
+  /// Returns null if no logo is available or the lookup fails.
+  Future<String?> fetchCompanyLogoUrl(String symbol) async {
+    final Uri url = Uri.parse('$_baseUrl/stock/profile2?symbol=$symbol&token=$_apiKey');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        final String? logo = data['logo'] as String?;
+        if (logo != null && logo.isNotEmpty) {
+          return logo;
+        }
+      }
+    } catch (e) {
+      print("Finnhub logo retrieval exception: $e");
+    }
+    return null;
+  }
 }

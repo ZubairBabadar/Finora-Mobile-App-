@@ -632,7 +632,7 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       onTap: () => _performDynamicSearch(queryUpper),
-                      leading: const Icon(Icons.travel_explore, color: Color(0xFF38BDF8)),
+                      leading: StockLogo(symbol: queryUpper, size: 40),
                       title: Text("Search '$queryUpper' on tracking indices", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
                       subtitle: Text("Query targeted against filter layer: $_selectedCountry", style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
                       trailing: Row(
