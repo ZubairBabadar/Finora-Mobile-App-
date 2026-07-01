@@ -98,9 +98,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildPlanTile(setModalState, 'Weekly Ticket', 2.99, 'Basic real-time technical alerts access'),
-                _buildPlanTile(setModalState, 'Monthly Strategy', 9.99, 'Full indicators access + Reverse Geolocation API'),
-                _buildPlanTile(setModalState, 'Annual Matrix', 79.99, 'Save 35% + Deep historical analytics parameters', isPopular: true),
+                _buildPlanTile(setModalState, 'Free', 0, 'Basic real-time technical alerts access'),
+                _buildPlanTile(setModalState, 'Premium Monthly', 14.99, 'Full indicators access + Reverse Geolocation API'),
+                _buildPlanTile(setModalState, 'Premium Yearly', 144.00, 'Save 20% + Deep historical analytics parameters + 11.99/month ', isPopular: true),
 
                 const SizedBox(height: 20),
                 const Divider(color: Color(0xFF22314F), height: 1),
@@ -138,6 +138,13 @@ class _PremiumScreenState extends State<PremiumScreen> {
 
   Widget _buildPlanTile(StateSetter setModalState, String title, double baseUsdCost, String feature, {bool isPopular = false}) {
     bool isSelected = _selectedTierPlan == title;
+    bool isPremium = title.contains('Premium');
+
+    // Define premium gradients matching your main presentation strategy matrix
+    final List<Color> gradientColors = title.contains('Yearly')
+        ? [const Color(0xFF10B981), const Color(0xFF0EA5E9)] // Emerald to Sky Blue for Value Year tier
+        : [const Color(0xFF0EA5E9), const Color(0xFF6366F1)]; // Sky Blue to Indigo for Monthly tier
+
     return GestureDetector(
       onTap: () {
         setModalState(() { _selectedTierPlan = title; });
@@ -147,28 +154,76 @@ class _PremiumScreenState extends State<PremiumScreen> {
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFF131D31),
+          color: isPremium ? null : const Color(0xFF131D31),
+          gradient: isPremium
+              ? LinearGradient(
+            colors: gradientColors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          )
+              : null,
           borderRadius: BorderRadius.circular(10),
+          boxShadow: (isPremium && isSelected)
+              ? [BoxShadow(color: gradientColors.last.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 3))]
+              : null,
           border: Border.all(
-              color: isSelected ? const Color(0xFF14B8A6) : (isPopular ? const Color(0xFF22314F).withValues(alpha:0.5) : const Color(0xFF22314F)),
+              color: isSelected
+                  ? (isPremium ? Colors.white : const Color(0xFF14B8A6))
+                  : (isPopular ? const Color(0xFF22314F).withValues(alpha:0.5) : Colors.transparent),
               width: isSelected ? 2.0 : 1.0
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                        title,
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)
+                    ),
+                    Padding(
+                      padding: EdgeInsets.only(right: isPopular ? 34.0 : 0.0),
+                      child: Text(
+                          FinoraApp.formatPrice(baseUsdCost),
+                          style: TextStyle(
+                              color: isPremium ? Colors.white : const Color(0xFF38BDF8),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13
+                          )
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text(
-                    FinoraApp.formatPrice(baseUsdCost),
-                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)
+                    feature,
+                    style: TextStyle(
+                        color: isPremium ? Colors.white.withValues(alpha: 0.8) : const Color(0xFF94A3B8),
+                        fontSize: 11
+                    )
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(feature, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+            if (isPopular)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                      color: Colors.black38,
+                      borderRadius: BorderRadius.circular(4)
+                  ),
+                  child: const Text(
+                      'PRO',
+                      style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)
+                  ),
+                ),
+              )
           ],
         ),
       ),
